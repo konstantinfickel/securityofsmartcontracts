@@ -1,0 +1,63 @@
+\section{Vulnerabilities and Attacks}
+
+\begin{table}[]
+	\centering
+	\resizebox{\textwidth}{!}{%
+		\begin{tabular}{@{}llll@{}}
+			\toprule
+			\textbf{Location}                          & \textbf{Topics}                       & \textbf{Vulnerabilities}                & \textbf{Real Attacks}   \\ \hline
+			\multirow{7}{*}{\begin{tabular}[c]{@{}l@{}}Compilation\\(Solidity)\end{tabular}} & \multirow{4}{*}{ABI}                  & Non-Restricted Function Accessibility   & Parity Theft            \\
+			                                           &                                       & Libraries called in their own context   & Parity Freeze           \\
+			                                           &                                       & Constructors of renamed contracts       & \texttt{Rubixi}         \\
+			                                           &                                       & Wrong interfaces                        &                         \\ \cline{2-4}
+			                                           & \multirow{3}{*}{Compilation}          & Compiler Bugs                           &                         \\
+			                                           &                                       & Type deduction                          &                         \\
+			                                           &                                       & Mishandled exceptions                   & \texttt{KingOfTheEther} \\ \hline
+			\multirow{7}{*}{\begin{tabular}[c]{@{}l@{}}Execution\\(EVM)\end{tabular}} & \multirow{2}{*}{Standalone}           & Overflows                               & MESH-Tokens             \\
+			                                           &                                       & Block Gas Limit                         & \texttt{GovernMental}   \\ \cline{2-4}
+			                                           & \multirow{5}{*}{Contract Interaction} & Reentrancy                              & \texttt{TheDAO}         \\
+			                                           &                                       & Using tx.origin                         &                         \\
+			                                           &                                       & Modifiable contract balances            &                         \\
+			                                           &                                       & Subcalls stopping the whole transaction & (\texttt{COIN\_BOX})    \\
+			                                           &                                       & Callstack depth                         &                         \\ \hline
+			\multirow{4}{*}{\begin{tabular}[c]{@{}l@{}}Platform\\(Ethereum Blockchain)\end{tabular}} & \multirow{4}{*}{Miners and Secrecy}   & Transaction order                       &                         \\
+			                                           &                                       & Secrets on the blockchain               & \texttt{RPS}            \\
+			                                           &                                       & Relying on block variables              & Roulette                \\
+			                                           &                                       & Abusing underpriced instructions        & DoS-Attack              \\\hline
+			\multirow{7}{*}{\begin{tabular}[c]{@{}l@{}}External\\(Users and interacting Platforms)\end{tabular}} & \multirow{4}{*}{Honeypots}            & Underhanded source code                 & X2\_FLASH               \\
+			                                           &                                       & Wrong library source code               & (\texttt{COIN\_BOX})    \\
+			                                           &                                       & Zero-Value-Transactions                 & \texttt{COIN\_BOX}      \\
+			                                           &                                       & Transaction Race                        & \texttt{GIFT\_CARD}     \\ \cline{2-4}
+			                                           & \multirow{3}{*}{Others}               & Orphan Addresses                        & 0x0                     \\
+			                                           &                                       & Incentive Misalignment                  &                         \\
+			                                           &                                       & Address-length attacks                  & Poloniex-Exchange       \\ \hline
+		\end{tabular}%
+	}
+	\caption{Taxonomy of the smart contract vulnerabilities presented in this thesis.}
+	\label{table:taxonomy}
+\end{table}
+
+In the following section, common vulnerabilities of smart contracts on the Ethereum blockchain will be presented. A similar list of attacks against smart contracts has been compiled by Atzei, Bartoletti and Cimoli in \cite{atzei:attacksurvey}, yet there are some major differences: After they had published their survey, new vulnerabilities -- like the ones related to the Parity Multi-Signature Wallet -- have been found. Others like the vulnerabilities related ABI collisions or the Incentive Misalignment had also not been included by the authors. The scope of this thesis is extended compared to the survey: In this section, vulnerabilities of the whole smart-contract ecosystem are considered, like Honeypots and the DoS-attack against the Ethereum Network because of malicious smart contracts. Attacks exploiting the described vulnerabilities that happened on the real Ethereum Blockchain are described in detail, presenting their context and consequences. If possible, solution approaches are presented for the vulnerabilities.
+
+The vulnerabilities presented in this section have been grouped into seven different topics that can be found in table \ref{table:taxonomy} in the second column. Those can be grouped into four "locations" of the pitfalls for the programmer when creating smart contracts:
+
+\begin{itemize}
+	\item[\textbf{Compilation:}] Misunderstandings of features of the high-level programming languages and bugs in the compiler
+	\item[\textbf{Execution:}] Wrong assumptions about the execution of the contract bytecode in the Ethereum virtual machine
+	\item[\textbf{Platform:}] Misjudgments about blockchain properties and the mining process
+	\item[\textbf{External:}] Confusion because of the presentation of the blockchain data on external platforms and other mistakes happening "outside" the blockchain
+\end{itemize}
+
+Compared to the taxonomy by Atzei, Bartoletti and Cimoli, the "External" category has been added and a few vulnerabilities have been moved to different categories: Some errors considered a pitfall of the compilation step in the survey here can be found in different groups: Since a re-entrancy vulnerability might also occur in code written directly in assembler, it has been moved to the "Execution" category. And although Solidity might make the user unjustifiably feel like the properties can't be read by external programs when using the \mintinline{solidity}{private}-modifier, the "Secrets on the blockchain"-issue is still mainly related to programs being executed in a distributed way and publicly on the blockchain; which lead to the decision to place this vulnerability in the "Platform" category.
+
+Most of the examples are shortened, and lines not important for understanding the code like \mintinline{solidity}{pragma solidity ^0.4.24;} have been left out.
+
+\input{tex/04_vulnerabilities/01_abi.tex}
+\input{tex/04_vulnerabilities/02_compiler.tex}
+\input{tex/04_vulnerabilities/03_execution.tex}
+\input{tex/04_vulnerabilities/04_interaction.tex}
+\input{tex/04_vulnerabilities/05_miners.tex}
+\input{tex/04_vulnerabilities/06_blockchainexplorers.tex}
+\input{tex/04_vulnerabilities/07_others.tex}
+
+\pagebreak{}

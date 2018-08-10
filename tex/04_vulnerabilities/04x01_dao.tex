@@ -1,0 +1,105 @@
+\paragraph{The DAO-Hack}
+The largest and most advanced hack in the history of the Ethereum platform was the hack of the \textit{decentralized autonomous organization} \texttt{TheDAO}, which used re-entrancy as the main vulnerability.
+
+The DAO was planned to be a investment company without employees running on the Ethereum blockchain and therefore out of control of state regulations. The investment decisions were planned to be made decentralized; it was planned that all investment decisions are decided by the votes of the participants. The concept was based on the idea, that a real company is also just a set of traditional contracts, that is being normally fulfilled by it employees; but in the case of \texttt{TheDAO} they are replaced by smart contracts that fulfil themselves. The code was written, published as open source software and deployed by the startup Slock.it, which was founded by the German programmers Christoph and Simon Jentzsch.\footnote{see \cite{zeit:dao}}
+
+One basic concept of the DAO was that the \textit{code is law}, which means that the single source of truth concerning \texttt{TheDAO} was its code deployed on the blockchain. This was stated clearly in the terms on the website of the DAO at \cite{dao:terms}:
+\begin{quotation}
+	The terms of The DAO Creation are set forth in the smart contract code existing on the Ethereum blockchain at \textit{[Address of TheDAO]}. Nothing in this explanation of terms or in any other document or communication may modify or add any additional obligations or guarantees beyond those set forth in The DAO’s code. \textit{[...]}
+\end{quotation}
+
+The "shares" of \texttt{TheDAO} were tokens, that were given to people sending in Ether during its funding period. Every token holder could enter proposals, and during a following debating period, all the users could decide whether to accept or decline. If enough token owners had voted and the result was in favour of the idea, the investment was sent to the address entered with the proposal.
+
+To protect the DAO from malicious proposals (like just paying out all its fundings to a malicious majority) the \mintinline{solidity}{curator} was introduced: They check every proposal, and can block those venomous to the DAO. To replace curators, participants could split the DAO (which of course could not be stopped by the curators) and move their transactions to a newly created copy of \texttt{TheDAO} with identical source code, but themselves as the curator. Slock.it had managed to persuade many important members of the Ethereum foundation to act as curators of \texttt{TheDAO} like Vitalik Buterin, the inventor of Ethereum (see \cite{slockit:curators}).
+
+After the 28-day funding window that ended on 28th of April 2016, 11 million Ether worth over 240 million US-\$\footnote{amount of Ether from \cite{etherscan:dao:balancebefore}; Ether value of \( 20.65 \) Ether / US\$ at opening of 17th July 2016 from \cite{coinmarketcap:ethervaluedao}} had been collected from more than 11 thousand addresses, which made it the most successful crowdfunding campaign at this point of time. The collected amount of Ether amounted to 14 \% of all the Ether available,\footnote{see \cite{coindesk:daohackjournalists} for the duration, participants, and largest crowdfunding in history; and \cite{economist:dao} for the 14 \%} which was especially surprising considering concerns that participants of the DAO won't be able to make good decisions due to a lack of information and experience\footnote{see \cite{technologyreview:daocriticism}}; and the doubts that using the DAO as an investment was legal.\footnote{see \cite{americanbanker:legalcriticism} and \cite{coindesk:daohackjournalists}}
+
+Instead, the problem finally killing the DAO was something different: There was a bug within the code of the DAO, that allowed stealing its funds. In the following section the technical aspects of the hack will be explained:\footnote{the code is shortened and refactored code from the DAO-contract at \cite{etherscan:dao}; analysis of the participating addresses was done by \cite{pfeffer:attackstory} and the exploit was analyzed by \cite{hackingdistributed:analysisdaoexploit}}
+
+\subparagraph{The Attack}
+The whole attack was based on vulnerability to re-entrancy-exploits of the functionality to split the DAO and therefore change the curator:
+
+As a preparation for the attack, the DAO-hacker started a proposal to split \texttt{TheDAO} and make himself the curator of a new child-DAO at transaction \cite{etherscan:lonelysolonely} on 8th of June 2016, with the unsuspicious proposal name of  \mintinline{solidity}{"lonely; so lonely"}. Because of \mintinline{solidity}{minSplitDebatePeriod = 1 weeks}, they had to wait for one week until the split could be executed.
+
+After the debate period had ended, the attacker started to launch their raid on 17th of June 2016: This is where the re-entrancy exploits came into play: Those smart contracts had already been deployed, had been sent DAO tokens (which made them stakeholders of the DAO), and had voted to participate in the split.
+
+One of those attacks can be found on the blockchain at transaction \cite{etherscan:dao:oneoftheattacks}, where the exploit first called \mintinline{solidity}{splitDAO()} for the created split proposal, that can be seen in listing \ref{lst:interaction:splitdao} to move the investments of the exploit account in the main \texttt{TheDAO} to the split DAO, that later received the name \texttt{TheDarkDAO} by the community. As can be seen in the listing at line 4, during the first split-operation the child-DAO was created, and its address was then saved for later calls of \mintinline{solidity}{splitDAO()}.
+
+There are three lines in the source code, that enabled the reentrancy-attack: The first one is line 12, where the share of the funds owned by the user is moved to \texttt{TheDarkDAO}. This line is thought to be only executed once, because at the end of the function in line 14 the balance is set to \texttt{0}, which would result in \texttt{fundsToBeMoved = 0} in the next call.
+
+\begin{listing}[H]
+	\begin{minted}[
+        linenos=true,
+        firstnumber=1
+    ]{solidity}
+function splitDAO(uint _proposalID, address _newCurator) {
+    Proposal p = proposals[_proposalID];
+
+    if (address(p.splitData[0].newDAO) == 0) {
+        p.splitData[0].newDAO = createNewDAO(_newCurator);
+        p.splitData[0].splitBalance = actualBalance();
+    }
+
+    uint fundsToBeMoved =
+        (balances[msg.sender] * p.splitData[0].splitBalance)
+            / p.splitData[0].totalSupply;
+    p.splitData[0].newDAO.createTokenProxy.value(fundsToBeMoved)(msg.sender);
+
+    withdrawRewardFor(msg.sender); // be nice, and get his rewards
+    balances[msg.sender] = 0;
+    paidOut[msg.sender] = 0;
+}
+    \end{minted}
+	\caption{A shortened version of the vulnerable \mintinline{solidity}{splitDao()}-function from the \texttt{DAO}-contract.}
+	\label{lst:interaction:splitdao}
+\end{listing}
+
+The problem of the code is the call to \mintinline{solidity}{withdrawRewardFor(msg.sender)} in line 14, where the share of the reward that were made by \texttt{TheDAO} would be transferred to the token owner. As a part of this function, a \mintinline{solidity}{call()} is launched, that is meant to transfer those profits to \mintinline{solidity}{msg.sender} (which in the case of the attack is the exploit).
+
+A look at the code of \mintinline{solidity}{withdrawRewardFor()} reveals, that here the check only tests if the reward would underflow, the safeguard in line 23 never \mintinline{solidity}{throw}s if the \mintinline{solidity}{paidOut[_account]} is \texttt{0}, which was true, because the DAO had not even made any profit yet:
+\begin{minted}[
+    linenos=true,
+    firstnumber=18
+]{solidity}
+function withdrawRewardFor(address _account) internal {
+    uint rewardPlusPaidOut =
+        (balances[_account] * rewardAccount.accumulatedInput())
+            / totalSupply;
+
+    if (rewardPlusPaidOut < paidOut[_account]) throw;
+    uint reward = rewardPlusPaidOut - paidOut[_account];
+
+    rewardAccount.payOut(_account, reward)
+
+    paidOut[_account] += reward;
+}
+\end{minted}
+
+The increase of \mintinline{solidity}{paidOut[_account]} in line 28 is no problem, because it is only executed after the re-entrancy happens, and is set to \texttt{0} directly afterwards in line 16 at the end of each transaction, so this never becomes a problem for the attacker.
+
+Next, \mintinline{solidity}{rewardAccount.payOut()} is called, where \mintinline{solidity}{rewardAccount} is a \texttt{ManagedAccount}-smart contract, that holds the received profits of the DAO and references the DAO contract as its owner. Because of this, \mintinline{solidity}{_recipient}, which contains the address of the address calling \mintinline{solidity}{splitDAO()} is sent the reward:
+\begin{minted}{solidity}
+function payOut(address _recipient, uint _amount) {
+    if (msg.sender != owner) throw;
+    _recipient.call.value(_amount)();
+}
+\end{minted}
+
+Because the \mintinline{solidity}{call}-function was used to transfer the Ether and therefore all available gas was sent along (probably to allow memory accesses in fallback function of the called contract), the smart contract could just call \mintinline{solidity}{splitDAO()} again for the same proposal, which would move the same amount of Ether again to \texttt{TheDarkDAO}. To ensure that the transaction does not fail due to insufficient gas, the recursion is stopped before this happens.
+
+Since due to the block gas limit the attacker only can steal small amounts of Ether in one call, somehow the DAO-tokens had to be saved from being set to \texttt{0} at the end \mintinline{solidity}{splitDAO()}. This was achieved by transferring using \mintinline{solidity}{transfer(address _to, uint256 _amount)} before ending the recursion to the address of a second, identical exploit, from where the execution could be executed again and afterwards the tokens were sent back to the first exploit.
+
+After executing this attack, \texttt{TheDarkDAO} had received 3.5 million Ether, which was about a third of the funds of the original \texttt{TheDAO}\footnote{balance of \texttt{TheDarkDAO} at the day after the attack at \cite{etherscan:darkdao:balanceafter}}, where the majority of the tokens and the curator account were controlled by the attacker enabling them to withdraw the funds using a funding proposal. This would take the attacker more than 27 days because of the creation window of the DAO contract alone (see \cite{ethereum:redaovulnerability}).
+
+One interesting fact was that the attacker was even prepared to deal with other splits happening before their attack: A second pair of exploit contracts had been prepared, that had voted for every split proposal after the one sent by attacker, giving them the chance to receive tokens of those potentially new split DAOs and repeating the attack there again.
+
+\subparagraph{Consequences for the Ethereum Network}
+Although the platform worked correctly, and the bug was completely caused by a programming mistake in the source code of \texttt{TheDAO}, the incident had an heavy impact on the whole Ethereum network: The Ethereum price in US-\$ dropped by almost \( 50 \% \) on the days following the attack.\footnote{see \cite{coinmarketcap:ethervaluedao}, comparing the opening of 17th June 2016 to closing of 18th June 2016}.
+
+To revert the effects of the attack, a fork was proposed in \cite{slockit:hardfork} that would remove the Ether from \texttt{TheDarkDAO} at a certain blocknumber. The Ether would then be placed into another smart contract (at \cite{etherscan:withdrawdao}), that would refund the initial token price to the participants of the DAO.
+
+The arguments against the fork were maintaining the idea of having immutable transactions on the blockchain -- and the question, if the hack was indeed a theft, or just another legitimate application of the DAO, whose terms stated that its functionality is described inside its source code, which also contained the vulnerability.
+
+The main reason for the Ethereum Foundation to initiate the fork of the Ethereum platform might have been the plan to make the blockchain a basis for commerce applications, and no reaction would have resulted in a big loss of trust in the platform. Additionally, the huge amounts of Ether owned by the \texttt{TheDAO}-hacker would also be problematic for future projects like the planned move to a \textit{proof of stake}-consensus mechanism, where the block validators vote on the next block weighted by their deposit.\footnote{see \cite{coindesk:daohackjournalists}, \cite[Proof of Stake FAQ]{ethereum:wiki} for explanation of proof of stake} Additionally, many important members of the Ethereum Foundation were involved in \texttt{TheDAO}: For example the founder of Ethereum Vitalik Buterin was one of the curators\footnote{see \cite{slockit:curators}} and even had bought some of its shares.\footnote{\cite{etherscan:buterindao} is a transaction of Vitalik Buterin buying DAO tokens for 900 Ether, that the address belongs to him is stated at \cite{unblock:buterinaddress}}
+
+On 20th of July 2016 the fork was conducted, and the majority of the participants of the network followed. While the main, forked branch of the blockchain with the refund address gained acceptance, the branch following the old rules and maintaining the effects of the hack was called "Ethereum Classic" and is still maintained by a group of developers up to time of writing -- advertising that they are respecting the immutability of transactions. Considering the market capitalization of the coins, Ethereum is today ways more popular than Ethereum Classic.\footnote{see \cite{heise:fork} and \cite{ethereumclassic:titlepage}}

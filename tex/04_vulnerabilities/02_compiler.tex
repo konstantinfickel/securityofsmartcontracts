@@ -1,0 +1,71 @@
+\subsection{Solidity Compiler}
+Another source of vulnerabilities is the compilation from a high-level language like Solidity to the Ethereum Virtual Machine bytecode. Additionally, some bad choices in the design of the language might lead to confusion when developing smart contracts -- and therefore to vulnerabilities in the bytecode.
+
+\subsubsection{Compiler Bugs}
+A source of vulnerabilities in smart contracts is the compilation, where a smart contract written in a high-level-language is transformed to bytecode that can be executed in the virtual machine. If the compiler does not work correctly, correct smart contracts written in the high level language might get corrupted:
+
+In the example problem of the compiler of Solidity, the most popular language for the programming of smart contracts will be presented. The \texttt{HighOrderByteCleanStorage}-bug\footnote{found inside \cite{solidity:buglist}} that was rated with a high severity that is going to be presented was found and fixed in november 2016.
+
+The Solidity compiler optimizes the state-storage usage by saving storage variables that are shorter than \( 256 \) bit in the same memort cell. Until compiler version 0.4.4, neighboring variables were modified in case of an overflow (as presented in \cite{ethereum:overflowblogpost}). Since \mintinline{solidity}{a} overflows in the following example, \mintinline{solidity}{b}, which is saved directly adjacent to the higher-order bits of \mintinline{solidity}{a}, will be modified to \texttt{1}:
+\begin{minted}{solidity}
+uint32 a = 0xffffffff; uint32 b = 0;
+function run() returns (uint32) {
+    a++;
+    return b;
+}
+\end{minted}
+
+Whereas the Solidity compiler is widely used and has received positive security audits (like \cite{augur:solidityaudit}, where all vulnerabilities found were rated to have a low severity), alternative languages like Serpent, a python-like contract programming language, which was the main contract programming language before Solidity was introduced in 2014 (see \cite{wikisource:solidityinventorgavinwood}), can be considerable worse:
+
+An audit by the smart-contract security company Zeppelin Solutions\footnote{that can be found in \cite{augur:serpentaudit}} criticized flaws in the language design like the no restrictions on redefining language keywords, using undeclared variables and accessing arrays out of bounds. Additionally the bad documentation with examples that can't be compiled and the idle development were criticized.
+
+\subsubsection{Type Deduction}
+A language feature that could become a security issue is the type deduction (as mentioned in \cite[Security Considerations; Minor details]{ethereum:solidity}): If the keyword \mintinline{solidity}{var} is used, the specific type of the variable is deduced as the smallest type the assigned value fits in. Since Solidity 0.4.20 released in april 2018 \mintinline{solidity}{var} is marked as deprecated.
+
+This feature is especially critical in \mintinline{solidity}{for}-loops: If the counter variable is initialized as \mintinline{solidity}{var i = 0;}, it is treated like \mintinline{solidity}{uint8 i = 0}, which will overflow for values larger than \( 255 \). In the following example, if \mintinline{solidity}{ownerList} has more than \( 255 \) elements and the comparison does not evaluate to be true, the following loop will not terminate because \mintinline{solidity}{i} overflows:
+\begin{minted}{solidity}
+for(var i = 0; i < ownerList.length; i++) {
+    if(ownerList[i] == toBeChecked) {
+        return true;
+    }
+}
+\end{minted}
+
+\subsubsection{Mishandled Exceptions}
+\label{section:vulnerabilities:interaction:mishandledexceptions}
+EVM exceptions can be raised when the gas of the execution runs out, the transaction is being reverted or an invalid command is being executed. When an exception occurs directly in the transaction the user called, the transaction is aborted and therefore the state of the blockchain is not modified.
+
+But when handling calls to other contracts, there are two different types of behavior for propagating exceptions: When calling functions of references to other contracts like for example \mintinline{solidity}{a.functionName()} or transferring Ether using \mintinline{solidity}{a.transfer()}, exceptions thrown in subcalls will be re-thrown and therefore the execution of the outer contract will be terminated as well.
+
+But when using \mintinline{solidity}{a.call()}, \mintinline{solidity}{a.delegatecall()} or \mintinline{solidity}{a.send()}, if the subcall fails for some reason, those functions just return \mintinline{solidity}{false}; and if the return value is not checked, the sub-call will just fail silently. \footnote{see \cite[Exception disorder]{atzei:attacksurvey}}
+
+A popular type of Ponzi scheme on the Ethereum Blockchain are "throne" contracts: They are owned by a user called the king or queen. If another user wants to take their place, he has to send a specific amount of Ether to the contract. The received money is then sent as a compensation to the old king, and the price to claim the throne from the last king is increased again.
+
+In listing \ref{lst:interaction:kingofthebachelorthesis} the claiming-function of a fictional throne-contract \texttt{KingOfTheBachelorThesis} is implemented.
+
+\begin{listing}[H]
+	\begin{minted}[
+        linenos=true,
+        firstnumber=16
+    ]{solidity}
+function claim(string _name) public payable {
+    require(msg.value > current.value);
+    current.refundAddress.send(address(this).balance);
+    
+    current = King({
+        name: _name,
+        refundAddress: msg.sender,
+        value: msg.value
+    });
+}
+    \end{minted}
+	\caption{Extract from the sample contract \texttt{KingOfTheBachelorThesis}.}
+	\label{lst:interaction:kingofthebachelorthesis}
+\end{listing}
+
+If the user decides to use a smart contract to claim the throne, whose fallback function  requires more gas than provided by send (for example because it saves the information about the received Ether in the contract storage), the \mintinline{solidity}{send()} will just fail silently.
+
+\paragraph{KingOfTheEther}
+The \texttt{KingOfTheEther} contract was a more elaborated version of the \texttt{King\-Of\-The\-Bachelor\-Thesis}, that existed on the Ethereum Blockchain. When a user claimed the throne using a smart contract whose fallback function executing when receiving Ether exceeded the gas provided with the \mintinline{solidity}{send}, the contract failed to return the compensation without noticing (see \cite{kingoftheether:postmortem}).
+
+% Underflowing arrays when not using push/pop

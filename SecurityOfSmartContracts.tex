@@ -1,0 +1,175 @@
+% \documentclass[10.5pt,a4paper,bibliography=totocnumbered,listof=totocnumbered,twoside]{scrartcl}
+\documentclass[10.5pt,a4paper,bibliography=totocnumbered,listof=totocnumbered]{scrartcl}
+
+\nonstopmode 
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{fancyhdr}
+\usepackage{tabularx}
+\usepackage{geometry}
+\usepackage{setspace}
+\usepackage[right]{eurosym}
+\usepackage{subfig}
+\usepackage{floatflt}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{colortbl}
+\usepackage{paralist}
+\usepackage{array}
+\usepackage{titlesec}
+\usepackage{parskip}
+\usepackage[right]{eurosym}
+\usepackage[subfigure,titles]{tocloft}
+\usepackage[pdfpagelabels=true]{hyperref}
+\usepackage{listings}
+\usepackage{mdframed}
+\usepackage{pdfpages}
+\usepackage{breqn}
+\usepackage{multicol}
+\usepackage[style=numeric-comp]{biblatex}
+\usepackage{minted}
+
+\setmintedinline{breaklines}
+\addbibresource{bibliography/sources.bib}
+
+\def\UrlBreaks{\do\/\do-}
+
+\raggedbottom
+
+\usepackage{etoolbox}
+\AtBeginEnvironment{minted}{\singlespacing%
+    \fontsize{9}{9}\selectfont}
+
+\geometry{a4paper, top=27mm, left=30mm, right=20mm, bottom=35mm, headsep=10mm, footskip=12mm}
+
+\hypersetup{unicode=false, pdftoolbar=true, pdfmenubar=true, pdffitwindow=false, pdfstartview={FitH},
+	pdftitle={Security of Smart Contracts},
+	pdfauthor={Konstantin Fickel},
+	pdfsubject={bachelor thesis - smart contract security},
+	pdfcreator={\LaTeX},
+	pdfproducer={pdfTeX \the\pdftexversion.\pdftexrevision},
+	pdfkeywords={bachelor thesis},
+	pdfnewwindow=true,
+	colorlinks=true,linkcolor=black,citecolor=black,filecolor=magenta,urlcolor=black}
+\pdfinfo{/CreationDate (D:20180718000000)}
+
+\begin{document}
+
+\titlespacing{\section}{0pt}{12pt plus 4pt minus 2pt}{-6pt plus 2pt minus 2pt}
+
+\renewcommand{\sectionmark}[1]{\markright{#1}}
+\renewcommand{\leftmark}{\rightmark}
+\pagestyle{fancy}
+\lhead{}
+\chead{}
+\rhead{\thesection\space\contentsname}
+\lfoot{Security of Smart Contracts}
+\cfoot{}
+\rfoot{\ \linebreak Page \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+\renewcommand{\thesection}{\Roman{section}}
+\renewcommand{\theHsection}{\Roman{section}}
+\pagenumbering{Roman}
+
+\thispagestyle{empty}
+\begin{center}
+	\includegraphics[scale=0.22]{img/common/unia.pdf}\\
+	\vspace*{2cm}
+	\Large
+	\textbf{Department of}\\
+	\textbf{Computer Science}\\
+	\vspace*{1.5cm}
+	\includegraphics[width=3.5cm]{img/cover/cover.pdf}\\
+	\vspace*{1cm}
+	\Huge
+	\textbf{Bachelor Thesis}\\
+	\vspace*{0.5cm}
+	\large
+	about the topic\\
+	\vspace*{0.5cm}
+	\textbf{Security of Smart Contracts}\\
+	\vfill{}
+	\normalsize
+	\newcolumntype{x}[1]{>{\raggedleft\arraybackslash\hspace{0pt}}p{#1}}
+	\begin{tabular}{x{3.5cm}p{10cm}}
+		\rule{0mm}{5ex}\textbf{author:}          & Konstantin Fickel\newline konstantin.fickel@student.uni-augsburg.de \\
+		\rule{0mm}{5ex}\textbf{supervisor:}      & Dr. Kuzman Katkalov                                                 \\
+		\rule{0mm}{5ex}\textbf{submission date:} & 1rd of August 2018                                                  \\
+		\rule{0mm}{5ex}\textbf{version:}         & v1.0.1                                                              \\
+	\end{tabular}
+\end{center}
+\pagebreak
+
+\setcounter{page}{1}
+\onehalfspacing
+\titlespacing{\section}{0pt}{12pt plus 4pt minus 2pt}{2pt plus 2pt minus 2pt}
+
+\pagebreak
+
+\renewcommand{\cfttabpresnum}{Tab. }
+\renewcommand{\cftfigpresnum}{Abb. }
+\settowidth{\cfttabnumwidth}{Abb. 10\quad}
+\settowidth{\cftfignumwidth}{Abb. 10\quad}
+
+\titlespacing{\section}{0pt}{12pt plus 4pt minus 2pt}{2pt plus 2pt minus 2pt}
+\singlespacing
+\rhead{TABLE OF CONTENTS}
+\renewcommand{\contentsname}{Table of Contents}
+\phantomsection
+\addtocounter{section}{1}
+\tableofcontents
+\pagebreak
+
+\titlespacing{\section}{0pt}{8pt plus 4pt minus 2pt}{-6pt plus 2pt minus 2pt}
+\titlespacing{\subsection}{0pt}{8pt plus 4pt minus 2pt}{-6pt plus 2pt minus 2pt}
+\titlespacing{\subsubsection}{0pt}{8pt plus 4pt minus 2pt}{-6pt plus 2pt minus 2pt}
+
+\renewcommand{\sectionmark}[1]{\markright{#1}}
+\renewcommand{\subsectionmark}[1]{}
+\renewcommand{\subsubsectionmark}[1]{}
+\lhead{Chapter \thesection}
+\rhead{\rightmark}
+
+% \onehalfspacing
+\renewcommand{\thesection}{\arabic{section}}
+\renewcommand{\theHsection}{\arabic{section}}
+\setcounter{section}{0}
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+\input{tex/01_introduction/index.tex}
+\input{tex/02_foundations/index.tex}
+\input{tex/03_ethereum/index.tex}
+\input{tex/04_vulnerabilities/index.tex}
+\input{tex/05_tools/index.tex}
+\input{tex/06_honeypotfilter/index.tex}
+\input{tex/07_conclusion/index.tex}
+
+\setcounter{biburllcpenalty}{5000}
+\setcounter{biburlucpenalty}{6000}
+\setcounter{biburlnumpenalty}{6000}
+
+\lhead{References}
+\rhead{}
+\printbibliography
+
+\pagebreak{}
+
+\appendix
+
+\pagenumbering{Roman}
+\setcounter{page}{1}
+\lhead{Appendix \thesection}
+\section*{Appendix}
+\phantomsection
+\addcontentsline{toc}{section}{Appendix}
+\addtocontents{toc}{\vspace{-0.5em}}
+\input{tex/08_appendix/index.tex}
+
+\end{document}

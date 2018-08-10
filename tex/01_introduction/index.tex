@@ -1,0 +1,18 @@
+\section{Introduction}
+Since the start of the Bitcoin Blockchain back in 2009, digital crypto-currencies have captured the public's attention and interest. While the most prominent application of blockchains is providing a public ledger tracking the transfers of a crypto currency to avoid double spending, more generalized and advanced applications of the blockchain technology are possible: For example, \textit{Smart Contracts} can be used, which are agreements between mutually distrusting partners, that are automatically enforced by the consensus mechanism of the blockchain. (see \cite{atzei:attacksurvey})
+
+In this thesis, smart contracts of the Ethereum-Blockchain will be considered. Ethereum is the second largest blockchain\footnote{according to marked capitalization, see \cite{coinmarketcap:overview}}, which focuses on the execution of smart contracts. Since its launch in July 2015 Ethereum has gained a market capitalization of more than 45 billion US-\$.
+
+Smart contracts are an especially popular and lucrative target for attacks due to various reasons. First, they manage crypto-currencies directly, and therefore exploiting a vulnerability of the contract can release its contained value. And since it is possible to act anonymously on the blockchain, there is only little risk for the attacker. An even more striking argument is the finality of transactions: Once an attack has been conducted and the transactions have been accepted, is is very hard to revert the consequences. Additionally, hacking smart contracts is very easy: In all cases, the executable bytecode can be found on the blockchain; in many cases, easy-to-read source code is available as well. Because of this, possible attacks can be found and tested out without any risk. (see \cite{wagner:honeypots})
+
+In the most significant hack in the history of the ethereum network, an attacker was able to steal 60 million dollar; and in an accidental deletion of a library 150 million dollar were rendered inaccessible forever on the blockchain. Both cases underline the importance of thorough development and research in this area.
+
+\paragraph{Contribution \& Significance} This bachelor thesis presents a survey of common vulnerabilities, including more recent attacks like the accidental deletion of the Parity Multi-Signature Library from November 2017. The different vulnerabilities are categorized into a taxonomy by the part of the smart contract ecosystem where the mistake of the programmer originated in. For all vulnerabilities possible solutions are provided and small and understandable examples have been created by the author; and if available real attacks performed on the Ethereum blockchain are explained in detail.
+
+As a new vulnerability the abuse of function identifier collisions in the Solidity ABI is presented; and with \textsc{Sact} a tool for calculating hash Solidity ABI identifier hash collisions has been created by the author.
+
+Additionally, the first systematic exposition of tricks used in honeypots, contracts that make users send them Ether by simulating security vulnerabilities, is provided, featuring two honeypot techniques have had not been known to be used in honeypots before.\footnote{namely transaction races and not calling call-functions like \mintinline{solidity}{adr.call.value(this.balance);)}}.
+
+Furthermore, a strategy to discourage honeypot development for blockchain explorers has been developed, and with \textsc{Amphicyon}, a tool for automated static Solidity-code analysis for underhanded contracts, has been implemented and executed on over 8.000 smart contracts.
+
+\pagebreak{}

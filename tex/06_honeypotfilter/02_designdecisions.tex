@@ -1,0 +1,20 @@
+\subsection{Design Decisions}
+When creating the tool, the major design decision was which data to base the decisions on: The first option is using the contract bytecode as done by \textsc{Oyente}, which is available for every smart contract directly in the blockchain. While this code would spot vulnerabilities to zero-value transactions (which is closely related to the transaction-ordering dependency supported by \textsc{Oyente}), this approach is not suited for finding underhanded Solidity code, because often it doesn't leave marks. For example, the following two functions compile to exactly the same bytecode:
+
+\begin{multicols}{2}
+	\begin{minted}{solidity}
+function underhandedSolidity() public {
+    msg.sender.call.value(1 ether);
+}
+\end{minted}
+
+	\begin{minted}{solidity}
+function emptyFunction() public {
+
+}
+\end{minted}
+\end{multicols}
+
+Another idea is using patterns in the transactions: When creating zero-value internal transaction honeypots, there are always several calls to another contract creating internal zero-value transactions to secretly change the contract state. While this approach is probably best for internal zero-value transaction honeypots, there is no way to spot honeypots using underhanded Solidity code this way, especially if the no-one was tricked by the honeypot.
+
+\textsc{Amphicyon} uses static analysis of the source code to detect honeypots: While it is easy to spot underhanded solidity code using this pattern, it has even a good chance when considering honeypots using zero-value-transaction because they usually are based on coding patterns not used in harmless contracts. Although only around 1 \% of the contracts provide their source code on the Ethereum blockchain\footnote{as calculated by \cite[Introduction]{nikolic:findingbadcontractsatscale}}, this is not a problem for smart contract honeypots, since they usually want to be found and reveal their sourcecode in order to be analyzed by potential victims.

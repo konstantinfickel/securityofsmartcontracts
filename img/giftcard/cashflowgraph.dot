@@ -1,0 +1,28 @@
+digraph transaction_graph {
+  rankdir=LR;
+
+  "0x99ba" [label = "0x99ba\nGIFT_CARD", shape = box];
+  "0xff17" [shape = oval];
+  "0xbd7d" [label = "0xbd7d", shape = oval];
+  "0x8abc" [shape = oval];
+  "0xf23d" [label = "0xf23d\nVictim", shape = oval];
+
+  "0xbd7d" -> "0x99ba" [ label = "Take()\nhigh gas price" ];
+  "0xff17" -> "0x99ba" [ label = "Create" ];
+  "0xff17" -> "0x99ba" [ label = "Put()\n0.2 Ether" ];
+  "0xbd7d" -> "0x8abc" [ label = "0.5 Ether" ]
+  "0x8abc" -> "0xff17" [ label = "0.32 Ether" ];
+  "0x99ba" -> "0xbd7d" [ label = "0.4 Ether" ];
+
+  "0xf23d" -> "0x99ba" [ label = "Put()\n0.2 Ether" ];
+  "0xf23d" -> "0x99ba" [ label = "Take()\nlow gas price" ];
+}
+
+/*
+https://etherscan.io/address/0x99bab102c0a03438bcfd70119f07ee646db26ddf (honeypot)
+https://etherscan.io/address/0xff17287eb85e2684f3431bbc6c8ca9a80de89285 (honeypot creator)
+https://etherscan.io/address/0xf23d5dcccb32f1f694b76054f1a42415deb6d184 (victim)
+https://etherscan.io/address/0xea40f65deb0010cc0ae1e6b70d2f05c27ad53af2 (owner deposit)
+https://etherscan.io/address/0xbd7df6eb2b5f22317b2a4bc6f7004d99f34ca8f7 (owner creator)
+https://etherscan.io/address/0x8abceed03cb86df5146e06cca2415b32dd81089a
+*/

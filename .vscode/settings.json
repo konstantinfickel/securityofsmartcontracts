@@ -1,0 +1,66 @@
+{
+    "cSpell.words": [
+        "amphicyon",
+        "auditability",
+        "blockchain",
+        "blockchains",
+        "buterin",
+        "bytecode",
+        "cryptocurrencies",
+        "cryptocurrency",
+        "delegatecall",
+        "entrancy",
+        "ethereum",
+        "etherscan",
+        "homoglyphs",
+        "incentivize",
+        "incentivized",
+        "mythril",
+        "selfdestruct",
+        "sourcecode",
+        "subcalls",
+        "vitalik",
+        "whitepaper",
+        "whitespaces"
+    ],
+    "latex-workshop.latex.recipes": [{
+        "name": "pdflatex -> bibtex -> pdflatex*2",
+        "tools": [
+            "pdflatex",
+            "biber",
+            "pdflatex",
+            "pdflatex"
+        ]
+    }],
+    "latex-workshop.latex.tools": [{
+            "name": "pdflatex",
+            "command": "pdflatex",
+            "args": [
+                "-synctex=1",
+                "-interaction=nonstopmode",
+                "-shell-escape",
+                "-file-line-error",
+                "%DOC%"
+            ]
+        },
+        {
+            "name": "biber",
+            "command": "biber",
+            "args": [
+                "%DOCFILE%"
+            ]
+        }
+    ],
+    "latex-workshop.latex.autoBuild.onSave.enabled": false,
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/.DS_Store": true,
+        "build": true,
+        "**/*.aux": true,
+        "_minted-*/**": true,
+        "sources/**": true
+    },
+}

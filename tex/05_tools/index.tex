@@ -1,0 +1,44 @@
+\section{Tools for Development and Analysis}
+To avoid creating smart contracts with vulnerabilities like described in the previous section, it is important that the programmer is aware of potential pitfalls, and has profound knowledge about the underlying technologies, former attacks and current progress in research. To assist programmers when mastering these difficulties, a range of tools have been developed. In this section, some promising analysis and development tools as well as alternative programming languages are presented:\footnote{list is partly inspired by \cite{parity:newdevprocesses} and \cite{ntnu:smartcontractsecurity}}
+
+\paragraph{Programming Languages}
+Although \textsc{Solidity} is the most stable and widely used programming language for Ethereum smart contracts, many security issues arise because of the mismatch between the JavaScript-like syntax and execution of the EVM, and the complexity of the syntax. To avoid those problems, alternative languages compiling into EVM bytecode could be used:
+
+\textsc{Vyper} \cite{github:vyper} is an experimental contract programming language trying to deal with the security and auditability-issues of \textsc{Solidity}: The Python-like language aims at being simpler, better understandable and more secure by design at the expense of missing language features like inheritance, modifiers or function overloading. Since \textsc{Vyper} is still in a beta-version, it should be used with caution. The following code is an implementation of the \mintinline{solidity}{allowWithdrawal()}-function of listing \ref{lst:introduction:caution}.
+\begin{minted}{python}
+@public
+def allowWithdrawal(_newDecision: bool):
+    assert(msg.sender == self.landlord)
+    self.landlordAllowsWithdrawal = _newDecision
+\end{minted}
+
+\textsc{Lisp Like Language} or LLL is a completely different approach to programming in higher programming languages like \textsc{Solidity} or \textsc{Vyper}: Programming \textsc{LLL} is very similar to writing EVM bytecode directly, but is able to take care of the difficult stack handling and jump management by introducing additional control structures. While \textsc{LLL} requires a skilled programmer and is harder to read, it compiles to clean and efficient bytecode and does not hide the nature of the EVM code.\footnote{\cite{github:llldocs}, part of \cite{github:vyper}} The direct connection to EVM assembler code can be seen in this implementation of \mintinline{solidity}{allowWithdrawal(bool)} written in the \textsc{Vyper}-variant of \textsc{LLL}:
+\begin{minted}{text}
+[if,
+  [eq, [mload, 0], /* function identifier hash: */ 864448360 <allowWithdrawal>],
+  [seq,
+    [calldatacopy, 320, 4, 32],
+    [assert, [iszero, callvalue]],
+    [uclamplt, [calldataload, 4], 2],
+    [assert, [eq, caller, [sload, 1 <self.landlord>]]],
+    [sstore, 2 <self.landlordAllowsWithdrawal>, [mload, 320 <_newDecision>]],
+    stop
+  ]
+],
+\end{minted}
+
+\paragraph{Development}
+When developing Solidity smart contracts, it is helpful to enforce coding practices and detect potential vulnerabilities. A tool programmed for this purpose is \textsc{Solium} (\cite{github:solium}), which performs a static analysis of Solidity source code and is able to report and fix style and security issues.
+
+For automated tests and a comfortable deployment process, a smart contract development framework like \textsc{Truffle} \cite{github:truffle} can be used. To ensure that every branch of the code is covered by the tests additional code-coverage measuring "plugins" like \textsc{solidity-coverage} \cite{github:soliditycoverage} can be integrated into Truffle.
+
+\textit{Fuzzing} is a technique to find bugs in programs by providing random and potentially invalid input data to a program while checking for different execution properties. \textsc{Echidna} is a tool that performs fuzzing on smart contracts.
+
+An approach to \textit{formal verification} of smart contracts was presented in \cite{bhargavan:formalsolidity}, where both EVM bytecode and Solidity source code can be compiled to \textsc{F*}, a functional programming language aimed at program verification. Using this approach, the equivalence of the source code with its compiled bytecode can be proven, as well as functional correctness specifications.
+
+\paragraph{Tools}
+As a way to analyse the bytecode of smart contracts and detect common vulnerabilities like Re-entrancy or mishandled exceptions, there is \textsc{Oyente}, which was presented in \cite{luu:makingsmartcontractssmarter}. It uses symbolic execution to detect possible execution paths in the bytecode, and then checks for different properties of the code without executing the contract. A mass-analysis of all contracts on the blockchain in May 2016 revealed, that potentially \( 27.9 \% \) of all smart contracts were not handling return values of external calls correctly and detected 186 contracts with a potential vulnerability to re-entrancy attacks.
+
+A similar approach is used by \textsc{Mythril} (\cite{consensys:mythril}), which was presented in April of this year, that is able to detect a broader range of security vulnerabilities and additionally includes tools to create control flow graphs for given bytecode and search the local copy of the blockchain for certain function calls or operations in smart contracts.
+
+\pagebreak{}

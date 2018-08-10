@@ -1,0 +1,86 @@
+\section{Using Sact}
+\label{appendix:abicollision}
+In this section, the a short usage guide for the \textit{Solidity ABI Collision Tool} (or \textsc{Sact}) will be presented. The dependencies for building the project are \texttt{gcc} and \texttt{make} along with the libraries \texttt{libkeccak}, \texttt{argp} and \texttt{uthash}; the build process can be launched by calling \texttt{make} inside the folder.
+
+Using \texttt{./collision --help} the integrated help page with the following contents can be displayed:
+\begin{verbatim}
+$ ./collision --help
+Usage: collision [OPTION...] from to
+A program calculating collisions of the Solidity ABI.
+
+  -c, --threads=INTEGER      Amount of threads used when no dictionary is used
+                             at the from-side.
+  -f, --from-prefix=STRING   Prefix to be used on the from-side.
+  -m, --mode=HASH|DICTIONARY|NONCE
+                             Mode of execution.
+  -t, --to-prefix=FILE       Prefix to be used on the to-side.
+  -?, --help                 Give this help list
+      --usage                Give a short usage message
+
+Mandatory or optional arguments to long options are also mandatory or optional
+for any corresponding short options.
+\end{verbatim}
+
+\subsection{Calculating Hashes}
+To calculate the function hash identifier of a fixed function, the function identifier can be entered as the first parameter -- and the hash value is printed out to the console.
+
+\begin{verbatim}
+$ ./collision "find my hash"
+9bb03d0f
+\end{verbatim}
+
+\subsection{Finding Collisions}
+The primary application of \textsc{Sact} is finding hash identifier collisions. To do this, the tool includes two different modes:
+
+\subsubsection{One-sided Search}
+In this first mode activated by \texttt{--mode=NONCE}, a function identifier with a matching hash value is attempted to be found for a fixed target function identifier. The tested identifiers are built using the following formula:
+\begin{verbatim}
+[from-prefix][nonce in the form of [A-Za-z]+][from]
+\end{verbatim}
+
+Since without any optimization this would take about an hour, the tool is able to use multiple threads; their amount can be defined using for example \texttt{--threads=4} for four threads. This mode is the only mode using more than one thread, for all other modes the argument will be ignored.
+
+\begin{verbatim}
+$ ./collision --mode=NONCE --threads=4 "()" "executeSomething()"
+[Thread 01] hash(A()) == f446c1d0 != d90fec61 == hash(executeSomething())
+[Thread 02] hash(FPXc()) == 3796f4d4 != d90fec61 == hash(executeSomething())
+[Thread 03] hash(KeuEB()) == 0412673b != d90fec61 == hash(executeSomething())
+[Thread 04] hash(PtRhB()) == 794e29e8 != d90fec61 == hash(executeSomething())
+...
+hash(wnpWTF()) == hash(executeSomething()) == d90fec61
+\end{verbatim}
+
+If a function identifier has been found, the tool terminates printing out the final solution.
+
+This functionality can be used to send arbitrary data to other contracts in restricted test environments like IDEs; or for obfuscation of the interaction with other contracts.
+
+\subsubsection{Two-sided Search}
+In the second mode of \textsc{Sact}, more natural-looking identifiers can be created for hash-collisions. To define possible identifers, so-called \textit{dictionary}-files can be used. A dictionary contains an ordered list of \textit{segments}, which are a set of multiple ore one strings. To generate an identifier, from each segment one string is taken and concatenated in order.
+
+Dictionaries can be stored in dictionary files, which are simple text files. The newline-character is used as a delimiter for the strings; with the special strings \texttt{[NEXT]} starting the next segment of the dictionary and \texttt{[END]} ending the read input. The later command leaves the possibility for comments or information required by the text editor. The following dictionary file would exactly generate the two entries \texttt{"Hello World!"} and \texttt{"Hello C!"}.
+
+\begin{verbatim}
+Hello
+[NEXT]
+World
+C
+[NEXT]
+!
+[END]
+\end{verbatim}
+
+Two find prettier hash collisions, it would be too difficult to build up a dictionary with more \( 2^{32} \) entries; it is simpler to use two different dictionaries with \( \sqrt{2^{32}} = 2^{16} \) terms. Because of this, this mode is built to use dictionaries both as source and target of the collision.
+
+The dictionary mode can be launched using \texttt{--mode=DICTIONARY}, specifying both used dictionary files as the arguments:
+\begin{verbatim}
+$ ./collision "data/from.txt" "data/to.txt" --mode=DICTIONARY
+hash("transferMyMoneyToTheAddressPlease(uint232,bool,address)")
+    = hash("validateInputWealthInstantaneously(int256[])") = 014f3c83
+hash("transferMyCashToTheAccount(uint256,bool,address)")
+    = hash("validateInputsAndGetSzaboGently(int256[])") = 60c3ba0f
+...
+\end{verbatim}
+
+Note that, for improved performance and storage usage, the smaller dictionary should be used on the to-side, because this side will be stored in the memory for comparison.
+
+\pagebreak{}

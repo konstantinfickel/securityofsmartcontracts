@@ -1,0 +1,69 @@
+\subsection{Miners and secrecy}
+Until now, we have not considered the miners, that have some choices when executing smart contracts and adding new segments to the block chain -- which can be used to modify the behavior of smart contracts:
+
+\subsubsection{Transaction Order}
+\label{section:vulnerability:transactionorder}
+After a transaction has been created and submitted to a node participating in the Ethereum network, the transaction is being broadcasted to the peers of the corresponding node. On mining nodes, a transaction pool is maintained. Miners then can pick arbitrary transactions in an any order from the pool to be included in the next block before they start attempting the proof of work. By default, transactions with higher gas prices are preferred.\footnote{as explained in \cite{blockchannel:lifecycletransaction}}
+
+Because of this, when submitting a transaction (after having checked that the contract is in a certain state), one can not be sure that the transaction will be mined at all or if the state of a contract the transaction is working with has been changed before execution. This becomes a problem, if the outcome of a transaction depends on state properties that can be modified by other transactions. A real application of this vulnerability will be presented in section \ref{section:honeypots:transactionordering}.
+
+\subsubsection{Secrets on the Blockchain}
+\label{sec:miners:secretsontheblockchain}
+Since everything happening on the Ethereum Blockchain is executed decentralized and can be validated by anyone, every action is public. This applies to function calls and their parameters, balances and even contract internal storage.
+
+Solidity allowing to declare some variables \mintinline{solidity}{private} does not help here, this feature only makes sure that the value can not be read by other contracts using the contract interface. The value can be read directly from the blockchain using tools like Mythril (see \cite{consensys:mythril}). Although this is a basic blockchain property, this has been neglected by smart contract creators.\footnote{see \cite{delmolino:rps} and\cite[Page 10 (Keeping secrets)]{atzei:attacksurvey}}
+
+\paragraph{Rock, Paper, Scissors-Game}
+\label{section:vulnerability:miners:rockpaperscissor}
+This became a problem for the rock-paper-scissors smart-contract \texttt{RPS}, that was advertised for on reddit. When calling one of the functions \mintinline{solidity}{Rock()}, \mintinline{solidity}{Paper()} or \mintinline{solidity}{Scissors()} along with one Ether, the move was saved in the contract state. If already another player had made a move, the choices were compared and the stake from both players was send to the winner.\footnote{contract taken form \cite{reddit:rockpaperscissor} or \cite{etherscan:rockpaperscissor}}
+
+It was easy to cheat the game, just by using a blockchain explorer like \url{etherscan.io}: If someone has already played, their move can be read from the transaction information, and therefore a winning move can be picked.
+
+As a solution the \textit{commit-reveal-pattern} can be used: In a first step, only the hash of the move (concatenated to some random values) is sent to the contract. As soon as two players have committed their moves, both players reveal sending in their move and their random value. Afterwards, the hashes are checked; and if both players have revealed correctly, the winner is determined and paid. A smart contract implementing this idea can be found at appendix \ref{appendix:rpsincentivescorrected}.
+
+\subsubsection{Relying on Block Variables}
+Another potential vulnerability arises when using some variables that can be accessed in the Ethereum virtual machine. A wrong assumption that is often made is that block variables can not be manipulated -- and that all transactions have to be generated before those are generated. Because of this, there are dangers for some applications:
+
+\paragraph{Random Number Generation}
+Since the Ethereum Virtual Machine executes the code in a deterministic way, generating random numbers is a challenge. A popular, but bad approach is using block variables like \mintinline{solidity}{block.timestamp}, as it was done in the Roulette-Contract that was presented in \cite{swende:breakingthehouse}:
+\begin{minted}{solidity}
+uint private seed;
+function generateRand() private returns (uint) { 
+    seed = ((seed * 3 + 1) / 2) % 10**9;
+    return (seed + block.number + block.difficulty + block.timestamp + block.gaslimit)
+            % 37;
+}
+\end{minted}
+
+This random number generation is not safe due to various reasons: Since \mintinline{solidity}{block.timestamp} can be set by the miner to an arbitrary value between the last mined block and the following block, a malicious miner could modify those values to influence the random number generation.\footnote{see \cite[Special variables and functions]{ethereum:solidity} and \cite[Section 4.3.4, equation 48]{ethereum:yellowpaper}}. And since the timestamp of the block is used directly to calculate the new \mintinline{solidity}{block.difficulty}, this value can be influenced as well.\footnote{as can be seen in  \cite[equation 41 and 44]{ethereum:yellowpaper}} \mintinline{solidity}{block.gaslimit} is even intended to be set by the miner within a certain range to vote for a new gas limit, which can also be abused to manipulate the random number generation. (see \cite[Section 4.3.4, equation 47]{ethereum:yellowpaper}).
+
+The private variable \mintinline{solidity}{seed} doesn't help either, because it can be read from the blockchain as described in section \ref{sec:miners:secretsontheblockchain}.
+
+Since all of those block variables can be accessed inside every contract, another contract can use those numbers to calculate the output of the random number generation on its own -- and then craft a call with a positive outcome, as observed by \cite[Contracts calling contracts]{swende:breakingthehouse}.
+
+Using the hashes of past blocks is a bad choice, too, because they are known before starting to mine the next block. Accessing the hash of the current block with \mintinline{solidity}{block.blockhash(block.number)} is even worse, because the value is not known at the time of mining and therefore will always return \( 0 \). (see \cite{positive:predictingrandomnumbers})
+
+A solution to this problems is using external sources to generate random numbers. One possibility would be to create a commit-reveal-scheme, with different users participating: In the commit step, every participant generates a random number and commits to this value by sending its hash to the smart contract. After a certain time, each participant reveals their number, which is then used to craft the final random number. To set the incentives right, every participant of the random number generation scheme has to deposit some Ether, that is increased with every correct contribution, and removed if a commit was not revealed correctly. An attempt to implement this idea is the RanDAO, that can be found at \cite{github:randao}.
+
+\subsubsection{Abusing Underpriced Instructions}
+This next attack is not a vulnerability of smart contracts, but of the whole Ethereum platform: To protect the nodes validating the blocks from requiring too much time to validate a block and memory to store the current state, each block has a limited amount of gas (the block gas limit) that can be spent during its execution.
+
+The gas required for a transaction is the sum of the price of each instruction executed, which is specified in the Ethereum Protocol (can be found at \cite[Appendix G]{ethereum:yellowpaper}). The amount of gas required for each instruction code is intended to be proportional to the resources required for its execution. If the price is too low, this can be used to launch a \textit{denial of service} attack against the nodes by intentionally executing this command many times.
+
+\paragraph{DoS-Attack against the Ethereum Network}
+Multiple of similar attacks were launched against the Ethereum Network in September and October 2016\footnote{see the list at \cite{bokconsulting:dos}}, the most effective of them bloating the blockchain state by creating millions of empty accounts will be described as an example in the following:
+
+The \texttt{SUICIDE}-operation is intended to be called by contracts that are no longer needed - and can therefore be removed from the blockchain state. The parameter for this operation is an address where the Ether in the balance of the contract is sent to. After the execution of the whole transaction, the contract code is deleted and the account is closed.
+
+If a message or a transaction is sent to an address that was never used before on the blockchain, a new account has to be created. When doing this using other opcodes like the regular \texttt{CALL}, there is a large fee for this operation to limit the execution of this operation; this penalty exists to keep the amount of accounts and therefore the state small, because the larger the blockchain state becomes and therefore more memory is required by the nodes. Since this fee did not exist for \texttt{SUICIDE}, huge amounts of accounts could be created.
+
+The basic attack was pretty simple: A launcher contract\footnote{its first iteration is located at \cite{etherscan:ddoslauncher}, which was disassembled for this analysis using \cite{consensys:mythril}. The bytecode for the suicide-contract is pushed to the stack in the first command of the launcher. A more detailed explanation can be found at \cite{stackexchange:dosexplained}} is called many times, that in every call first creates another contract that just suicides to the address given in its call data. To achieve this, only this simple bytecode was required:
+\begin{verbatim}
+PUSH1 0x00
+CALLDATALOAD
+SUICIDE
+\end{verbatim}
+
+Then, the launcher calls the suicide-contracts multiple times providing an address which is incremented which each call; and checks the gas price occasionally to not run out of gas during the transaction. Using this, the attacker managed to create over 19 million accounts over multiple instructions, which is a considerable amount compared to the around 700 thousand regular accounts at the time.\footnote{estimated by \cite{bokconsulting:dos}}
+
+To stop the attacks, the gas prices for the instructions were adjusted in the fork proposed in EIP 150 (\cite{ethereum:eip150}) and an account creation fee was added for suicides; and in EIP 158 (\cite{ethereum:eip158}) the deletion of empty accounts when they were called was added. This enabled later cleanups by simply sending an empty transaction to the accounts created during the attack (see \cite{etherscan:sweeper}). Up until today, when downloading the full Ethereum blockchain, the synchronization is slowed down because of this attack (see \cite{ethereum:slowsyncing}).

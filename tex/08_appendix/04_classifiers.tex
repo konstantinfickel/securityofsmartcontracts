@@ -1,0 +1,58 @@
+\section{Amphicyon Classifier Table}
+\label{appendix:classifiers}
+
+\begin{table}[H]
+	\resizebox{\textwidth}{!}{%
+		\begin{tabular}{@{}lllll@{}}
+			\toprule
+			\textbf{Type}                                                   & \textbf{Classifier name}                & \textbf{Using}      & \( \frac{\textsf{P} \left( \textnormal{Honeypot} \mid \texttt{FOUND} \right)}{\textsf{P} \left( \textnormal{Harmless} \mid \texttt{FOUND} \right)} \) & \( \frac{\textsf{P} \left( \textnormal{Honeypot} \mid \neg \texttt{FOUND} \right)}{\textsf{P} \left( \textnormal{Harmless} \mid \neg \texttt{FOUND} \right)} \) \\ \midrule
+			\multirow{5}{*}{Property to\linebreak{}attract interest}        & \texttt{canSendEther}                   & \texttt{AST}        & \( 200 \% \)                                                                                                                                          & \( 0 \% \)                                                                                                                                                      \\
+			                                                                & \texttt{containsTokenInterface}         & \texttt{AST}        & \( 20 \% \)                                                                                                                                           & \( 180 \% \)                                                                                                                                                    \\
+			                                                                & \texttt{oneEtherBalance}                & \texttt{ETHERSCAN}  & \( 1000 \% \)                                                                                                                                         & \( 90 \% \)                                                                                                                                                     \\
+			                                                                & \texttt{understandableLength}           & \texttt{SOURCECODE} & \( 200 \% \)                                                                                                                                          & \( 0 \% \)                                                                                                                                                      \\
+			                                                                & \texttt{uppercaseName}                  & \texttt{ETHERSCAN}  & \( 200 \% \)                                                                                                                                          & \( 90 \% \)                                                                                                                                                     \\ \midrule
+			Follow-Up                                                       & \texttt{honeypotLatched}                & \texttt{ETHERSCAN}  & \( 100 \% \)                                                                                                                                          & \( 100 \% \)                                                                                                                                                    \\ \midrule
+			\multirow{7}{*}{Underhanded Solidity\linebreak{}code technique} & \texttt{codeHiddenBySpaces}             & \texttt{SOURCECODE} & \( \infty \)                                                                                                                                          & \( 95 \% \)                                                                                                                                                     \\
+			                                                                & \texttt{comparingValueAndBalance}       & \texttt{AST}        & \( \infty \)                                                                                                                                          & \( 95 \% \)                                                                                                                                                     \\
+			                                                                & \texttt{emptyStringCompilerBug}         & \texttt{AST}        & \( \infty \)                                                                                                                                          & \( 95 \% \)                                                                                                                                                     \\
+			                                                                & \texttt{shadowedParentVariable}         & \texttt{AST}        & \( 200 \% \)                                                                                                                                          & \( 90 \% \)                                                                                                                                                     \\
+			                                                                & \texttt{similarVariableNames}           & \texttt{AST}        & \( 100 \% \)                                                                                                                                          & \( 100 \% \)                                                                                                                                                    \\
+			                                                                & \texttt{storageNullPointer}             & \texttt{AST}        & \( \infty \)                                                                                                                                          & \( 95 \% \)                                                                                                                                                     \\
+			                                                                & \texttt{uncalledExternalCall}           & \texttt{AST}        & \( \infty \)                                                                                                                                          & \( 95 \% \)                                                                                                                                                     \\ \midrule
+			\multirow{5}{*}{Typical Honeypot\linebreak{}coding patterns}    & \texttt{hashedVariableCanBeSetUnhashed} & \texttt{AST}        & \( \infty \)                                                                                                                                          & \( 95 \% \)                                                                                                                                                     \\
+			                                                                & \texttt{initializationPhase}            & \texttt{AST}        & \( 600 \% \)                                                                                                                                          & \( 75 \% \)                                                                                                                                                     \\
+			                                                                & \texttt{modifiableLibraryVariable}      & \texttt{AST}        & \( 200 \% \)                                                                                                                                          & \( 90 \% \)                                                                                                                                                     \\
+			                                                                & \texttt{preventableTransfers }          & \texttt{AST}        & \( 150 \% \)                                                                                                                                          & \( 90 \% \)                                                                                                                                                     \\
+			                                                                & \texttt{silentlyFailingFunction}        & \texttt{AST}        & \( 750 \% \)                                                                                                                                          & \( 75 \% \)                                                                                                                                                     \\ \midrule
+		\end{tabular}%
+	}
+	\caption{List of the classifiers implemented by \textsc{Amphicyon}.}
+	\label{table:classifiers}
+\end{table}
+
+The ratios \( \frac{\textsf{P} \left( \textnormal{Honeypot} \mid \texttt{FOUND} \right)}{\textsf{P} \left( \textnormal{Harmless} \mid \texttt{FOUND} \right)} \) (and \( \frac{\textsf{P} \left( \textnormal{Honeypot} \mid \neg \texttt{FOUND} \right)}{\textsf{P} \left( \textnormal{Harmless} \mid \neg \texttt{FOUND} \right)} \)) (which are rounded to a precision of \( 5 \% \) in the table) reveal how the classifier was weighted in the honeypot detection. A value above \( 100 \% \) implicates, that the the contract was more likely to be seen as a honeypot if the classifier was found (or not found); with a value below \( 100 \% \), the classifier decreased the probability of the contract being seen as a honeypot.
+
+In the following list, for every classifier of \textsc{Amphicyon} a short description is given that explains when the classifier is activated:
+
+\begin{itemize}
+	\item[\texttt{canSendEther}] Contains any \mintinline{solidity}{transfer()} of Ether
+	\item[\texttt{containsTokenInterface}] Function identifiers appear in ERC20-standard
+	\item[\texttt{oneEtherBalance}] Balance of one Ether
+	\item[\texttt{understandableLength}] Less than 150 lines, so that the contract can be easily understood
+	\item[\texttt{uppercaseName}] Contract name is in uppercase letters
+	\item[\texttt{honeypotLatched}] The honeypot received Ether from two different accounts
+	\item[\texttt{codeHiddenBySpaces}] Contains more than 200 spaces in a row
+	\item[\texttt{comparingValueAndBalance}] Contains a comparison of \mintinline{solidity}{msg.value} and \mintinline{solidity}{this.balance}
+	\item[\texttt{emptyStringCompilerBug}] Contains a function call containing an empty string as an argument, and the compiler version of the contract was affected by the compiler bug
+	\item[\texttt{shadowedParentVariable}] Contains a state variable that is also present in parent contract
+	\item[\texttt{similarVariableNames}] Contains very similar variable names, that might get confused
+	\item[\texttt{storageNullPointer}] Contains a reference to a storage null-pinter
+	\item[\texttt{uncalledExternalCall}] Contains a member-access of e.g. \mintinline{solidity}{.value()}, which is not for a second time
+	\item[\texttt{hashedVariableCanBeSetUnhashed}] Contain a \mintinline{solidity}{bytes32} state variable, that can be both set directly and by hashing another value
+	\item[\texttt{initializationPhase}] Contains a \mintinline{solidity}{bool} storage variable, that can prevent the execution of functions
+	\item[\texttt{modifiableLibraryVariable}] A library reference can be changed outside the constructor
+	\item[\texttt{preventableTransfers }] A transfer occurs in the same function as an external function call
+	\item[\texttt{silentlyFailingFunction}] The whole function body is surrounded by an \mintinline{solidity}{if}-statement
+\end{itemize}
+
+\pagebreak{}

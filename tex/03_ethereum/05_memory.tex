@@ -1,0 +1,9 @@
+\subsection{Storage Alignment}
+\label{section:deepdive:memory}
+From the perspective of a smart contract programmer, the persistent smart contract storage can be seen as an monstrous array containing \( 2^{256} \) elements, which is the amount of possible values a \mintinline{solidity}{uint}, whose elements initially are all filled with zeroes. Every element of the storage array can be modified and changed arbitrarily by the programmer.
+
+Solidity uses the following technique to map variables to storage cells: The first state variable declared inside the contract is saved in slot \( 0 \), the next variable follows respectively in the following slot. If a storage variable like a \mintinline{solidity}{struct} or a fixed-size array (for example \mintinline{solidity}{uint256[]}) requires more than one memory slot, the subsequent slot is used.
+
+Dynamically sized state variables like arrays (\mintinline{solidity}{uint[]}) or mappings (\mintinline{solidity}{mapping(string -> address)}) are saved in a different way: At the beginning of the array, only one slot is used. In there, the length will be saved, if the element is a dynamic array, otherwise the cell will retain value \mintinline{solidity}{0}.
+
+The location of the array elements is determined by hashing the position in the array or the key in the mapping, in short by hashing \mintinline{solidity}{uint256(keccak256(key, slot))}. This memory layout relies on the assumption, that no collisions of the \texttt{keccak256}-algorithm will be found.\footnote{see \cite{programmingtheblockchain:storagelayout} and \cite[Layout of State Variables in Storage]{ethereum:solidity}}

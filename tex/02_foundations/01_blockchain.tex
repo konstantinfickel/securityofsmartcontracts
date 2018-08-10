@@ -1,0 +1,23 @@
+\subsection{Blockchain}
+A blockchain is a append-only linked-list that powers a infinite state machine run on top of a peer-to-peer network with byzantine failure model. ({see \cite{cryptroncis:blockchainesoftwareengineers}) In the following paragraphs, the parts of this definition will be explained in detail, mainly in the context of the Ethereum Blockchain.
+
+\paragraph{State Machine}
+The abstract concept behind the blockchain is an \textit{infinite state machine}. The state can be seen as a list of accounts that are able to own units of a crypto currencies. In a simple case, there are only accounts which are controlled by private keys that correspond to public keys that are referenced in the blockchain state.
+
+The transitions of this state machine are called \textit{transactions} and are in this case just transfers of crypto currencies from one account to another. To ensure that only the owner of the account is able to spend their balance, a valid signature of the corresponding private key is required. If a transaction is not valid, because for example the signature is corrupted or a higher value is sent than owned by the account, the blockchain state is not changed by the transaction. Transactions are atomic, which indicates that they either are executed completely, or that they don't change the state of the blockchain at all.
+
+By using public key cryptography, it is ensured that only the account owner is able to transfer its balance. A problem arising is \textit{double spending}, meaning that the owner of an account issues two contradicting, valid transactions transferring its balance to another account. As a solution to this problems, transactions have to become irreversible once they have been accepted by the system.
+
+\paragraph{Blocks}
+To fix the double spending problem, the network has to agree to an order of the transactions. To achieve this, transactions that are broadcasted over the peer-to-peer network, are collected in transaction pools and put into an order to form blocks. A block is referenced by its hash value, which changes completely at any modification to it's contents, and it is difficult to find collisions between two arbitrary different blocks.
+
+The hash of the previous block is contained in the next block -- so if the content of a block is changed, all blocks appended to this block will become invalid, so that attempts to modify old transactions can be easily detected and prevented.
+
+\paragraph{Consensus Protocol}
+To make the blockchain work without a central authority, a peer-to-peer network is created that is used to broadcast transactions and new blocks. Every full node participating in the blockchain maintains a complete copy of the data structure.
+
+One of the more interesting achievements of the blockchain is, that no trusted nodes are required to run the system. To achieve this, the proof of work was introduced: To append a block to the blockchain, additionally, a mathematical puzzle has to be solved; for example the block has to be modified in a way, that the hash value starts with a certain amount of zeroes. In the network, many different miners compete to solve the puzzle and therefore be able to append the block. To achieve this, a lot of calculations are required, which amounts to time, computing infrastructure and energy. Participating in this process is incentivized by transferring transaction fees and newly minted coins to the accounts of the miners. If the chain splits and two conflicting versions of the blockchain exist, the nodes prefer the longer blockchain, ensuring that the version where the majority of the calculations was performed for is kept.
+
+As blockchain have a so-called \textit{Byzantine Failure Model}, none of the participants has to be trusted, and some nodes might even be attempting to destroy the integrity of the Blockchain.\footnote{see \cite{lamport:byzantine}} This robustness against attacks against the network is at the cost of performance compared to a centralized approach.
+
+This consensus protocol was first popularized by and implemented in \textit{Bitcoin} by Nakamoto in \cite{nakamoto:bitcoin}, which was launched in 2009 and is up to today the blockchain with the highest market capitalization.

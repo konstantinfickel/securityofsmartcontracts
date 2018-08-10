@@ -1,0 +1,58 @@
+\subsection{Error during Execution}
+The following two sections present problems that arise from the execution of the bytecode in the Ethereum Virtual Machine. In this section only problems with standalone contracts are considered:
+
+\subsubsection{Overflows}
+Since numbers are stored with a limited amount of bits, only a range of numbers can be stored in a variable. If the result of an arithmetic operation is outside the range of the containing type, the higher-order-bits will be cut off resulting in an \textit{overflow} which leads an unexpected result.
+
+In the following example, the small data type \mintinline{solidity}{uint32} were intentionally used to avoid monstrously large sample inputs. When calling \mintinline{solidity}{transfer(0x..., 0xffffffff, 0x0000001)}, the sum of \mintinline{solidity}{amount} and \mintinline{solidity}{fee} overflows and therefore becomes \texttt{0}, which will then pass the comparison in the second line and therefore create new coins for the account \mintinline{solidity}{to}:
+\begin{minted}{solidity}
+function transfer(address to, uint32 amount, uint32 fee) public {
+    require(balances[msg.sender] >= amount + fee);
+    balances[msg.sender] -= amount + fee;
+    balances[to] += amount;
+}
+\end{minted}
+
+A way to avoid overflows is using additional checks - those can be easily included using libraries like \texttt{SafeMath} created by OpenZeppelin Solutions (available at \cite{zeppelin:safemath}). A safe addition, that reverts the transaction in case of an overflow, looks like this:
+\begin{minted}{solidity}
+c = a + b;
+require(c >= a);
+\end{minted}
+
+\paragraph{Smart-MESH-Token}
+Tokens are crypto-currencies, whose balances are managed by and stored inside a smart contract. They are often sold to back projects or startups; and used as a substitute for crowdfunding-platforms like Kickstarter. One of those tokens called M2C Mesh Network was created in order to support the development of an autonomous network between IoT-devices (see their whitepaper at \cite{mesh:whitepaper}).
+
+The addition that was prone to overflows was inside a function of that Token contract\footnote{whose code can be found at \cite{etherscan:mesh:code}}, that allowed third parties to transfer tokens with the approval (a cryptographic signature) of the account owner. This function was intended to be used by exchanges, to allow trading tokens of users that don't own Ether to pay the gas required for the execution of the transfer.
+
+To ensure that the account's balance is high enough for the transaction, the following check was done with \texttt{_fee} and \texttt{_value} being function parameters:
+\begin{minted}{solidity}
+if(balances[_from] < _fee + _value) revert();
+balances[_to] += _value;
+balances[msg.sender] += _fee;
+balances[_from] -= _value + _fee;
+\end{minted}
+
+To conduct the attack, a transaction with the sum of \texttt{_fee} and \texttt{_value} being greater than the maximal amount of \mintinline{solidity}{uint}, so that their sum evaluates to \( 0 \), was crafted. (see \cite{etherscan:mesh:transaction}) This created an absurd amount of tokens out of thin air worth over \( 10^{57} \) US-\$ with the market value of the coin at that time. As a reaction to this, some of the bigger exchanges temporarily disabled their support for ERC20-Tokens. (see \cite{cryptoslate:batchoverflow} and \cite{medium:integeroverflowerc20})
+
+\subsubsection{Block Gas Limit}
+The maximum amount of gas spent over all transactions inside a block is limited by the \textit{block gas limit}, which is a variable of the Ethereum blockchain that the miner of the current block can change by about \( 0.1 \% \) relative to the parent block (defined in \cite[Section 4.3.4, equation 47]{ethereum:yellowpaper}) by each miner, which enables them to "vote" for the next block gas limit.
+
+If a transaction requires more gas than the block gas limit, it can not be executed, regardless of the gas limit set with the transaction. (see \cite[Security Considerations, Block Gas Limit and Loops]{ethereum:solidity}) Contracts are especially prone to this vulnerability, if they contain a dynamic array growing over time, that has to be iterated in the future.
+
+\paragraph{GovernMental}
+The Ponzi-Contract \texttt{GovernMental} (see \cite{github:governmental}) that was deployed in March 2016 is supposed to simulate a state that is in debt. A user can lend money to the state by sending Ether to the function \mintinline{solidity}{lendGovernmentMoney()}, and then will be added to the list of creditors. The received money is then used to pay previous creditors, and small amounts are deducted to pay the creators of the contract and to build up a jackpot. If no additional money is received after twelve hours, the corrupt state crashes, and the last creditor wins the jackpot. Afterwards, the contract is reset to start from the beginning.
+
+In the following extracts from the smart contract code of \texttt{GovernMental}, that is located at \cite{etherscan:governmental:code}, lines not relevant to the vulnerability have been omitted. Whenever someone transfers Ether to the contract calling the function \mintinline{solidity}{lendGovernmentMoney()}, the sender is added to the list of creditors:
+\begin{minted}{solidity}
+creditorAddresses.push(msg.sender);
+\end{minted}
+
+As soon as time runs out, the state will crash and the last creditor will receive the jackpot. The critical part is the assignment to \mintinline{solidity}{new address[](0)}, because in bytecode this becomes a loop setting all elements of the array to zero:
+\begin{minted}{solidity}
+if (lastTimeOfNewCredit + TWELVE_HOURS < block.timestamp) {
+	creditorAddresses[creditorAddresses.length - 1].send(profitFromCrash);
+	creditorAddresses = new address[](0);
+}
+\end{minted}
+
+On 25th of April 2016 the jackpot had filled up, and no one provided fundings for twelve hours, so that the last creditor won the jackpot of over one thousand Ether. But due to the expensive storage operations to clear the array, the prize could not be claimed, because in every call the gas limit was exceeded and therefore the whole transaction reverted, so that the Ether was stuck inside the contract (see \cite{reddit:governmental}). After two months, on the 17th of July 2016, enough miners had voted to increase the block gas limit, so that the winner was finally able to retrieve the jackpot (at transaction \cite{etherscan:governmental:retrieve}).

